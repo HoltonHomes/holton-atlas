@@ -51,7 +51,7 @@ export function LandMapsSection({
         <p>Use one aerial and turn on the evidence you need. These layers are screening tools; parcel-level conclusions stay separate from point-level findings.</p>
       </div>
       <div className="layer-toolbar" aria-label="Map layers">
-        {['Terrain', 'Slope', 'Soils', 'Flood', 'Wetlands'].map((layer) => (
+        {['Terrain', 'Topography', 'Slope', 'Soils', 'Water', 'Flood', 'Wetlands'].map((layer) => (
           <button key={layer} className={activeLayers.includes(layer) ? 'active' : ''} onClick={() => onToggleLayer(layer)}>
             <span className="layer-check">{activeLayers.includes(layer) ? '✓' : '+'}</span>{layer}
           </button>
