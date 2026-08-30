@@ -43,6 +43,8 @@ const OHIO_LOCATORS = [
   },
 ]
 
+const OHIO_COUNTY_BOUNDARY = 'https://maps.ohio.gov/arcgis/rest/services/Hosted/Ohio_County_Boundaries_Land_Only/FeatureServer/0/query'
+
 const PARCEL_PROVIDERS: Record<string, { name: string; url: string; fields: string }> = {
   clermont: {
     name: 'Clermont County public GIS',
@@ -92,6 +94,12 @@ function jsonp<T>(baseUrl: string, params: Record<string, string>, timeoutMs = 1
   })
 }
 
+function normalizeCounty(value: unknown) {
+  return typeof value === 'string'
+    ? value.replace(/\s+County$/i, '').trim()
+    : null
+}
+
 function extractCounty(attributes: Record<string, unknown>) {
   const raw = [
     attributes.Subregion,
@@ -101,9 +109,35 @@ function extractCounty(attributes: Record<string, unknown>) {
     attributes.county,
   ].find((value) => typeof value === 'string')
 
-  return typeof raw === 'string'
-    ? raw.replace(/\s+County$/i, '').trim()
-    : null
+  return normalizeCounty(raw)
+}
+
+async function resolveOhioCounty(longitude: number, latitude: number): Promise<string | null> {
+  try {
+    const data = await jsonp<{
+      features?: Array<{ attributes?: Record<string, unknown> }>
+      error?: unknown
+    }>(OHIO_COUNTY_BOUNDARY, {
+      geometry: `${longitude},${latitude}`,
+      geometryType: 'esriGeometryPoint',
+      inSR: '4326',
+      spatialRel: 'esriSpatialRelIntersects',
+      outFields: 'name,county,county_code,fips_code',
+      returnGeometry: 'false',
+    })
+
+    if (data.error) return null
+    const attributes = data.features?.[0]?.attributes ?? {}
+    return normalizeCounty(
+      attributes.name ??
+      attributes.NAME ??
+      attributes.county ??
+      attributes.County ??
+      attributes.COUNTY,
+    )
+  } catch {
+    return null
+  }
 }
 
 export async function resolveOhioAddress(address: string): Promise<LocatedProperty | null> {
@@ -128,11 +162,15 @@ export async function resolveOhioAddress(address: string): Promise<LocatedProper
         continue
       }
 
+      const longitude = candidate.location.x
+      const latitude = candidate.location.y
+      const county = extractCounty(candidate.attributes ?? {}) ?? await resolveOhioCounty(longitude, latitude)
+
       return {
         address: candidate.address ?? address,
-        longitude: candidate.location.x,
-        latitude: candidate.location.y,
-        county: extractCounty(candidate.attributes ?? {}),
+        longitude,
+        latitude,
+        county,
         score: candidate.score ?? null,
         source: locator.name,
       }
