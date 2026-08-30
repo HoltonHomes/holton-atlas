@@ -48,8 +48,8 @@ function monthsBetween(dateString: string, now: Date) {
 function saleWeightForAge(months: number | null, configuredWeight: number) {
   if (months == null) return configuredWeight
   if (months <= 6) return Math.max(configuredWeight, 0.7)
-  if (months <= 18) return Math.max(configuredWeight, 0.6)
-  if (months <= 30) return Math.min(configuredWeight, 0.55)
+  if (months <= 24) return Math.max(configuredWeight, 0.6)
+  if (months <= 36) return Math.min(configuredWeight, 0.5)
   if (months <= 48) return Math.min(configuredWeight, 0.4)
   return Math.min(configuredWeight, 0.25)
 }
@@ -149,7 +149,13 @@ export function buildAtlasValuation(profile: ResearchProfile | null, now = new D
 
   let confidence: AtlasValuation['confidence'] = 'Low'
   if (saleAdjusted != null && compIndication != null && avmMedian != null) confidence = spread / estimateRaw <= 0.18 ? 'Moderate' : 'Low'
-  if (saleAdjusted != null && validComps.length >= 3 && avmValues.length >= 3 && spread / estimateRaw <= 0.12) confidence = 'High'
+  if (
+    saleAdjusted != null &&
+    months != null && months <= 12 &&
+    validComps.length >= 3 &&
+    avmValues.length >= 3 &&
+    spread / estimateRaw <= 0.12
+  ) confidence = 'High'
 
   return {
     estimate,
