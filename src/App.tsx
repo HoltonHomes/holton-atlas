@@ -66,25 +66,41 @@ function App() {
   const mapContainer = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const markerRef = useRef<Marker | null>(null)
+  const hasProperty = Boolean(locatedProperty)
+  const mapMode = hasProperty ? 'report' : 'landing'
 
   useEffect(() => {
-    if (!mapContainer.current || mapRef.current) return
+    if (!mapContainer.current) return
     const map = new MapLibreMap({
       container: mapContainer.current,
       style: aerialStyle,
-      center: [-84.22, 39.13],
-      zoom: 8.5,
+      center: locatedProperty ? [locatedProperty.longitude, locatedProperty.latitude] : [-84.22, 39.13],
+      zoom: locatedProperty ? 17 : 8.5,
       attributionControl: {},
       maxZoom: 20,
     })
     map.addControl(new NavigationControl({ showCompass: false }), 'top-right')
     mapRef.current = map
+
+    if (locatedProperty) {
+      markerRef.current = new Marker({ color: '#d95f82' })
+        .setLngLat([locatedProperty.longitude, locatedProperty.latitude])
+        .addTo(map)
+    }
+
     return () => {
       markerRef.current?.remove()
+      markerRef.current = null
       map.remove()
       mapRef.current = null
     }
-  }, [])
+  }, [mapMode])
+
+  useEffect(() => {
+    if (mapMode !== 'report' || !parcel) return
+    const timeout = window.setTimeout(() => drawParcel(parcel), 50)
+    return () => window.clearTimeout(timeout)
+  }, [mapMode, parcel])
 
   function clearParcel() {
     setParcel(null)
@@ -100,16 +116,20 @@ function App() {
     const map = mapRef.current
     if (!map) return
     const feature = { type: 'Feature', geometry: nextParcel.geometry, properties: nextParcel.properties } as any
-    const existingSource = map.getSource('atlas-parcel') as GeoJSONSource | undefined
-    if (existingSource) existingSource.setData(feature)
-    else {
-      map.addSource('atlas-parcel', { type: 'geojson', data: feature })
-      map.addLayer({ id: 'atlas-parcel-fill', type: 'fill', source: 'atlas-parcel', paint: { 'fill-color': '#d95f82', 'fill-opacity': 0.16 } })
-      map.addLayer({ id: 'atlas-parcel-line', type: 'line', source: 'atlas-parcel', paint: { 'line-color': '#d95f82', 'line-width': 4 } })
+    const addOrUpdate = () => {
+      const existingSource = map.getSource('atlas-parcel') as GeoJSONSource | undefined
+      if (existingSource) existingSource.setData(feature)
+      else {
+        map.addSource('atlas-parcel', { type: 'geojson', data: feature })
+        map.addLayer({ id: 'atlas-parcel-fill', type: 'fill', source: 'atlas-parcel', paint: { 'fill-color': '#d95f82', 'fill-opacity': 0.16 } })
+        map.addLayer({ id: 'atlas-parcel-line', type: 'line', source: 'atlas-parcel', paint: { 'line-color': '#d95f82', 'line-width': 4 } })
+      }
+      const bounds = new LngLatBounds()
+      extendBounds(bounds, (nextParcel.geometry as { coordinates?: unknown }).coordinates)
+      if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: { top: 54, right: 54, bottom: 54, left: 54 }, maxZoom: 18.5, duration: 900 })
     }
-    const bounds = new LngLatBounds()
-    extendBounds(bounds, (nextParcel.geometry as { coordinates?: unknown }).coordinates)
-    if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: { top: 54, right: 54, bottom: 54, left: 54 }, maxZoom: 18.5, duration: 900 })
+    if (map.isStyleLoaded()) addOrUpdate()
+    else map.once('load', addOrUpdate)
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -128,12 +148,6 @@ function App() {
         return
       }
       setLocatedProperty(property)
-      const map = mapRef.current
-      if (map) {
-        markerRef.current?.remove()
-        markerRef.current = new Marker({ color: '#d95f82' }).setLngLat([property.longitude, property.latitude]).addTo(map)
-        map.flyTo({ center: [property.longitude, property.latitude], zoom: 17, essential: true })
-      }
       if (!property.county) {
         setSearchStatus(`Address verified through ${property.source}. County parcel connection is still resolving.`)
         return
@@ -150,7 +164,6 @@ function App() {
       }
       setParcel(parcelData.parcel)
       setParcelProvider(parcelData.provider ?? `${property.county} County GIS`)
-      drawParcel(parcelData.parcel)
       setSearchStatus(`Verified parcel found in ${parcelData.provider ?? `${property.county} County GIS`} records.`)
     } catch (error) {
       setLocatedProperty(null)
@@ -168,7 +181,6 @@ function App() {
   const livingArea = numericValue(properties, ['SQ_FT', 'LIVING_AREA', 'LIVAREA', 'SQUARE_FEET', 'SF'])
   const yearBuilt = firstValue(properties, ['YRBLT', 'YEAR_BUILT', 'YEARBUILT'])
   const zoning = firstValue(properties, ['ZoneType', 'ZONING', 'Zoning', 'ZONE'])
-  const hasProperty = Boolean(locatedProperty)
 
   return (
     <main className={hasProperty ? 'site-shell report-mode' : 'site-shell'}>
@@ -198,12 +210,10 @@ function App() {
         <>
           <section className="property-shell">
             <div className="property-topbar"><form className="compact-search" onSubmit={handleSubmit}><input value={address} onChange={(event) => setAddress(event.target.value)} aria-label="Search another property" /><button type="submit" disabled={isSearching}>{isSearching ? 'Analyzing…' : 'Search'}</button></form><span className="report-status">{parcel ? 'Parcel verified' : 'Address verified'}</span></div>
-
             <header className="property-identity">
               <div><p className="eyebrow">ATLAS PROPERTY REPORT</p><h1>{locatedProperty?.address}</h1><div className="identity-meta"><span className="evidence-badge verified">Verified address</span><span>{locatedProperty?.county ? `${locatedProperty.county} County` : 'Ohio'}</span><span>{locatedProperty?.source}</span></div></div>
               <div className="quick-facts"><div><span>Acres</span><strong>{acres ? acres.toFixed(2) : '—'}</strong></div><div><span>Home size</span><strong>{livingArea ? `${livingArea.toLocaleString()} sf` : '—'}</strong></div><div><span>Year built</span><strong>{String(yearBuilt ?? '—')}</strong></div><div><span>Appraised</span><strong>{money(appraised)}</strong></div></div>
             </header>
-
             <div className="property-hero-grid">
               <section className="report-map-card"><div className="live-map report-map" ref={mapContainer} /><div className="map-overlay-label">AERIAL · {parcel ? 'PARCEL VERIFIED' : 'ADDRESS LOCATED'}</div><div className="map-bottom-bar"><div><span className="mini-label">MAP STATUS</span><strong>{parcel ? 'Verified parcel boundary' : 'Parcel boundary awaiting county source'}</strong></div><span className={parcel ? 'location-pill verified-pill' : 'location-pill'}>{parcel ? 'Verified' : 'Located'}</span></div></section>
               <aside className="property-summary-card"><div className="summary-heading"><span>Property snapshot</span><small>{parcelProvider || 'Statewide address record'}</small></div><div className="summary-list"><div><span>Parcel ID</span><strong>{String(parcelId ?? 'Requires parcel record')}</strong></div><div><span>Zoning</span><strong>{String(zoning ?? 'Requires verification')}</strong></div><div><span>Address source</span><strong>{locatedProperty?.source}</strong></div><div><span>County</span><strong>{locatedProperty?.county ? `${locatedProperty.county} County` : 'Resolving'}</strong></div></div><div className="status-note"><span className="status-dot" />{searchStatus}</div></aside>
