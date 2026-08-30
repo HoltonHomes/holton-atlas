@@ -32,6 +32,13 @@ export type ParcelResult = {
   error?: string
 }
 
+type ParcelProvider = {
+  name: string
+  url: string
+  fields: string
+  evidence: 'official-county' | 'public-gis'
+}
+
 const OHIO_LOCATORS = [
   {
     name: 'Ohio Locator (authoritative)',
@@ -54,16 +61,44 @@ const OHIO_COUNTY_BOUNDARIES = [
   },
 ]
 
-const PARCEL_PROVIDERS: Record<string, { name: string; url: string; fields: string }> = {
+// County adapters are deliberately isolated here. ATLAS can keep statewide/federal
+// intelligence working even when a local parcel or CAMA adapter is not connected yet.
+const PARCEL_PROVIDERS: Record<string, ParcelProvider> = {
   clermont: {
     name: 'Clermont County public GIS',
     url: 'https://maps.clermontcountyohio.gov/server/rest/services/WMAS/Parcels/MapServer/0/query',
     fields: 'PIN,PRCLID,ParcelNumber,ACRES,APRLAND,APRBLDG,APRTOT,ASDLAND,ASDBLDG,ASDTOT,PRICE,SALESDATE,SQ_FT,RMBED,FIXBATH,YRBLT,STYLE,DISTRICT,ZoneType,Floodway,HYPERLINK',
+    evidence: 'official-county',
+  },
+  brown: {
+    name: 'Brown County public parcel GIS',
+    url: 'https://services3.arcgis.com/3Zd7D4Itq19bMuuV/ArcGIS/rest/services/Parcels/FeatureServer/0/query',
+    fields: '*',
+    evidence: 'public-gis',
+  },
+  adams: {
+    name: 'Adams County public GIS',
+    url: 'https://gis.adamscounty.org/arcgis/rest/services/land_use/MapServer/4/query',
+    fields: '*',
+    evidence: 'official-county',
+  },
+  warren: {
+    name: 'Warren County GIS Department',
+    url: 'https://services7.arcgis.com/qWymSnMRrQR7OiJ3/ArcGIS/rest/services/AGO_WarrenCounty_WFL1/FeatureServer/14/query',
+    fields: '*',
+    evidence: 'official-county',
+  },
+  hamilton: {
+    name: 'Hamilton County CAGIS open data',
+    url: 'https://services.arcgis.com/JyZag7oO4NteHGiq/ArcGIS/rest/services/Open_Data_Feature_Collection/FeatureServer/0/query',
+    fields: '*',
+    evidence: 'official-county',
   },
   butler: {
     name: 'Butler County public GIS',
     url: 'https://services2.arcgis.com/FS7YxIXpWoaR2sAe/arcgis/rest/services/Parcels/FeatureServer/0/query',
     fields: '*',
+    evidence: 'public-gis',
   },
 }
 
