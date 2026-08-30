@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Map as MapLibreMap, Marker, NavigationControl } from 'maplibre-gl'
+import type { GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { findClermontParcel } from './services/clermontParcels'
+import type { ClermontParcel } from './services/clermontParcels'
 
 const capabilities = [
   'Value & CMA',
@@ -18,9 +21,19 @@ type LocatedProperty = {
   longitude: number
 }
 
+function money(value?: number | null) {
+  if (!value) return '—'
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
 function App() {
   const [address, setAddress] = useState('')
   const [locatedProperty, setLocatedProperty] = useState<LocatedProperty | null>(null)
+  const [parcel, setParcel] = useState<ClermontParcel | null>(null)
   const [searchStatus, setSearchStatus] = useState('')
   const [isSearching, setIsSearching] = useState(false)
   const mapContainer = useRef<HTMLDivElement | null>(null)
@@ -48,12 +61,55 @@ function App() {
     }
   }, [])
 
+  function drawParcel(nextParcel: ClermontParcel) {
+    const map = mapRef.current
+    if (!map) return
+
+    const feature = {
+      type: 'Feature',
+      geometry: nextParcel.geometry,
+      properties: nextParcel.properties,
+    } as any
+
+    const existingSource = map.getSource('atlas-parcel') as GeoJSONSource | undefined
+    if (existingSource) {
+      existingSource.setData(feature)
+      return
+    }
+
+    map.addSource('atlas-parcel', {
+      type: 'geojson',
+      data: feature,
+    })
+
+    map.addLayer({
+      id: 'atlas-parcel-fill',
+      type: 'fill',
+      source: 'atlas-parcel',
+      paint: {
+        'fill-color': '#d95f82',
+        'fill-opacity': 0.14,
+      },
+    })
+
+    map.addLayer({
+      id: 'atlas-parcel-line',
+      type: 'line',
+      source: 'atlas-parcel',
+      paint: {
+        'line-color': '#d95f82',
+        'line-width': 4,
+      },
+    })
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const query = address.trim()
     if (!query) return
 
     setIsSearching(true)
+    setParcel(null)
     setSearchStatus('Locating property…')
 
     try {
@@ -88,28 +144,45 @@ function App() {
       }
 
       setLocatedProperty(property)
-      setSearchStatus('Address located. Parcel lookup is the next layer.')
 
       const map = mapRef.current
       if (map) {
         markerRef.current?.remove()
-        markerRef.current = new Marker({ color: '#d95f82' })
+        markerRef.current = new Marker({ color: '#1c2b45' })
           .setLngLat([property.longitude, property.latitude])
           .addTo(map)
 
         map.flyTo({
           center: [property.longitude, property.latitude],
-          zoom: 16.2,
+          zoom: 17,
           essential: true,
         })
       }
+
+      setSearchStatus('Address located. Checking county parcel records…')
+
+      try {
+        const matchedParcel = await findClermontParcel(property.longitude, property.latitude)
+        if (matchedParcel) {
+          setParcel(matchedParcel)
+          drawParcel(matchedParcel)
+          setSearchStatus('Verified parcel found in Clermont County public GIS records.')
+        } else {
+          setSearchStatus('Address located. Verified parcel coverage for this county is not connected yet.')
+        }
+      } catch {
+        setSearchStatus('Address located. County parcel service could not be reached right now.')
+      }
     } catch {
       setLocatedProperty(null)
+      setParcel(null)
       setSearchStatus('ATLAS could not reach the address locator. Try again in a moment.')
     } finally {
       setIsSearching(false)
     }
   }
+
+  const parcelId = parcel?.properties.ParcelNumber || parcel?.properties.PRCLID || parcel?.properties.PIN
 
   return (
     <main className="site-shell">
@@ -143,13 +216,30 @@ function App() {
                 autoComplete="street-address"
               />
               <button type="submit" disabled={isSearching}>
-                {isSearching ? 'Locating…' : 'Analyze property'}
+                {isSearching ? 'Analyzing…' : 'Analyze property'}
               </button>
             </div>
             <p className={searchStatus ? 'search-status active' : 'search-status'}>
               {searchStatus || 'ATLAS separates verified records, calculated findings and items that still require verification.'}
             </p>
           </form>
+
+          {parcel && (
+            <section className="parcel-facts" aria-label="Verified parcel facts">
+              <div className="fact-heading">
+                <span className="evidence-badge verified">Verified</span>
+                <p>Clermont County public GIS</p>
+              </div>
+              <div className="facts-grid">
+                <div><span>Parcel</span><strong>{parcelId || '—'}</strong></div>
+                <div><span>Acres</span><strong>{parcel.properties.ACRES?.toFixed(2) || '—'}</strong></div>
+                <div><span>Appraised value</span><strong>{money(parcel.properties.APRTOT)}</strong></div>
+                <div><span>Living area</span><strong>{parcel.properties.SQ_FT ? `${parcel.properties.SQ_FT.toLocaleString()} sq ft` : '—'}</strong></div>
+                <div><span>Year built</span><strong>{parcel.properties.YRBLT || '—'}</strong></div>
+                <div><span>Zoning</span><strong>{parcel.properties.ZoneType || 'Requires verification'}</strong></div>
+              </div>
+            </section>
+          )}
         </div>
 
         <aside className="preview-card map-card" aria-label="ATLAS property map">
@@ -157,11 +247,13 @@ function App() {
           <div className="map-overlay-label">ATLAS PROPERTY MAP</div>
           <div className="preview-content map-summary">
             <div>
-              <p className="mini-label">ADDRESS LOCATION</p>
+              <p className="mini-label">{parcel ? 'VERIFIED PARCEL' : 'ADDRESS LOCATION'}</p>
               <h2>{locatedProperty ? locatedProperty.address : 'Search a property to begin.'}</h2>
             </div>
-            {locatedProperty ? (
-              <span className="location-pill">Located · parcel next</span>
+            {parcel ? (
+              <span className="location-pill verified-pill">Verified parcel</span>
+            ) : locatedProperty ? (
+              <span className="location-pill">Located</span>
             ) : (
               <span className="location-pill muted">Ready</span>
             )}
