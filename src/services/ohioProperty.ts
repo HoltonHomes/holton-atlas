@@ -43,7 +43,16 @@ const OHIO_LOCATORS = [
   },
 ]
 
-const OHIO_COUNTY_BOUNDARY = 'https://maps.ohio.gov/arcgis/rest/services/Hosted/Ohio_County_Boundaries_Land_Only/FeatureServer/0/query'
+const OHIO_COUNTY_BOUNDARIES = [
+  {
+    name: 'Ohio Hosted County Boundaries',
+    url: 'https://maps.ohio.gov/arcgis/rest/services/Hosted/County_Boundaries/FeatureServer/0/query',
+  },
+  {
+    name: 'ODOT County Boundaries',
+    url: 'https://tims.dot.state.oh.us/ags/rest/services/Boundaries/County/FeatureServer/0/query',
+  },
+]
 
 const PARCEL_PROVIDERS: Record<string, { name: string; url: string; fields: string }> = {
   clermont: {
@@ -107,37 +116,40 @@ function extractCounty(attributes: Record<string, unknown>) {
     attributes.County,
     attributes.COUNTY,
     attributes.county,
-  ].find((value) => typeof value === 'string')
+    attributes.NAME,
+    attributes.Name,
+    attributes.name,
+    attributes.COUNTY_NAM,
+    attributes.COUNTYNAME,
+  ].find((value) => typeof value === 'string' && value.trim())
 
   return normalizeCounty(raw)
 }
 
 async function resolveOhioCounty(longitude: number, latitude: number): Promise<string | null> {
-  try {
-    const data = await jsonp<{
-      features?: Array<{ attributes?: Record<string, unknown> }>
-      error?: unknown
-    }>(OHIO_COUNTY_BOUNDARY, {
-      geometry: `${longitude},${latitude}`,
-      geometryType: 'esriGeometryPoint',
-      inSR: '4326',
-      spatialRel: 'esriSpatialRelIntersects',
-      outFields: 'name,county,county_code,fips_code',
-      returnGeometry: 'false',
-    })
+  for (const boundary of OHIO_COUNTY_BOUNDARIES) {
+    try {
+      const data = await jsonp<{
+        features?: Array<{ attributes?: Record<string, unknown> }>
+        error?: unknown
+      }>(boundary.url, {
+        geometry: `${longitude},${latitude}`,
+        geometryType: 'esriGeometryPoint',
+        inSR: '4326',
+        spatialRel: 'esriSpatialRelIntersects',
+        outFields: '*',
+        returnGeometry: 'false',
+      })
 
-    if (data.error) return null
-    const attributes = data.features?.[0]?.attributes ?? {}
-    return normalizeCounty(
-      attributes.name ??
-      attributes.NAME ??
-      attributes.county ??
-      attributes.County ??
-      attributes.COUNTY,
-    )
-  } catch {
-    return null
+      if (data.error) continue
+      const county = extractCounty(data.features?.[0]?.attributes ?? {})
+      if (county) return county
+    } catch {
+      // Try the next official statewide county boundary source.
+    }
   }
+
+  return null
 }
 
 export async function resolveOhioAddress(address: string): Promise<LocatedProperty | null> {
