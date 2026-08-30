@@ -143,13 +143,24 @@ function App() {
 
     try {
       const geocodeResponse = await fetch(`/api/geocode?address=${encodeURIComponent(query)}`)
-      const geocodeData = await geocodeResponse.json() as { match?: LocatedProperty | null; error?: string }
-      if (!geocodeResponse.ok) throw new Error(geocodeData.error || 'Address service unavailable')
+      const geocodeData = await geocodeResponse.json() as {
+        match?: LocatedProperty | null
+        error?: string
+        detail?: string
+      }
+
+      if (!geocodeResponse.ok) {
+        throw new Error(geocodeData.detail || geocodeData.error || `Resolver returned HTTP ${geocodeResponse.status}`)
+      }
 
       const property = geocodeData.match
       if (!property) {
         setLocatedProperty(null)
-        setSearchStatus('No confident Ohio address match found. Try the full street address, city and ZIP.')
+        setSearchStatus(
+          geocodeData.detail
+            ? `No address match. ${geocodeData.detail}`
+            : 'No confident Ohio address match found. Try the full street address, city and ZIP.',
+        )
         return
       }
 
@@ -165,11 +176,11 @@ function App() {
       }
 
       if (!property.county) {
-        setSearchStatus('Address verified in Ohio records. County could not be resolved automatically yet.')
+        setSearchStatus(`Address verified by ${property.source}. County could not be resolved automatically yet.`)
         return
       }
 
-      setSearchStatus(`Address verified in ${property.county} County. Checking parcel records…`)
+      setSearchStatus(`Address verified in ${property.county} County by ${property.source}. Checking parcel records…`)
 
       const parcelResponse = await fetch(
         `/api/parcel?county=${encodeURIComponent(property.county)}&longitude=${property.longitude}&latitude=${property.latitude}`,
@@ -195,10 +206,14 @@ function App() {
       setParcelProvider(parcelData.provider ?? `${property.county} County GIS`)
       drawParcel(parcelData.parcel)
       setSearchStatus(`Verified parcel found in ${parcelData.provider ?? `${property.county} County GIS`} records.`)
-    } catch {
+    } catch (error) {
       setLocatedProperty(null)
       clearParcel()
-      setSearchStatus('ATLAS could not reach the Ohio property resolver. Try again in a moment.')
+      setSearchStatus(
+        error instanceof Error
+          ? `ATLAS resolver error: ${error.message}`
+          : 'ATLAS could not reach the Ohio property resolver.',
+      )
     } finally {
       setIsSearching(false)
     }
@@ -249,7 +264,7 @@ function App() {
             <div className="address-proof">
               <span className="evidence-badge verified">Verified address</span>
               <span>{locatedProperty.county ? `${locatedProperty.county} County` : 'Ohio'}</span>
-              <span>Ohio OGRIP LBRS</span>
+              <span>{locatedProperty.source}</span>
             </div>
           )}
 
