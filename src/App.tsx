@@ -1,4 +1,6 @@
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useRef, useState } from 'react'
+import { Map as MapLibreMap, Marker, NavigationControl } from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
 const capabilities = [
   'Value & CMA',
@@ -9,13 +11,103 @@ const capabilities = [
   'Rural Potential',
 ]
 
+type LocatedProperty = {
+  address: string
+  latitude: number
+  longitude: number
+}
+
 function App() {
   const [address, setAddress] = useState('')
+  const [locatedProperty, setLocatedProperty] = useState<LocatedProperty | null>(null)
+  const [searchStatus, setSearchStatus] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
+  const mapContainer = useRef<HTMLDivElement | null>(null)
+  const mapRef = useRef<MapLibreMap | null>(null)
+  const markerRef = useRef<Marker | null>(null)
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (!mapContainer.current || mapRef.current) return
+
+    const map = new MapLibreMap({
+      container: mapContainer.current,
+      style: 'https://tiles.openfreemap.org/styles/liberty',
+      center: [-84.22, 39.13],
+      zoom: 8.5,
+      attributionControl: true,
+    })
+
+    map.addControl(new NavigationControl({ showCompass: false }), 'top-right')
+    mapRef.current = map
+
+    return () => {
+      markerRef.current?.remove()
+      map.remove()
+      mapRef.current = null
+    }
+  }, [])
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!address.trim()) return
-    window.alert(`ATLAS property analysis is being wired next for: ${address.trim()}`)
+    const query = address.trim()
+    if (!query) return
+
+    setIsSearching(true)
+    setSearchStatus('Locating property…')
+
+    try {
+      const url = new URL('https://geocoding.geo.census.gov/geocoder/locations/onelineaddress')
+      url.searchParams.set('address', query)
+      url.searchParams.set('benchmark', 'Public_AR_Current')
+      url.searchParams.set('format', 'json')
+
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Address service unavailable')
+
+      const data = await response.json() as {
+        result?: {
+          addressMatches?: Array<{
+            matchedAddress: string
+            coordinates: { x: number; y: number }
+          }>
+        }
+      }
+
+      const match = data.result?.addressMatches?.[0]
+      if (!match) {
+        setLocatedProperty(null)
+        setSearchStatus('No confident address match found. Try including city, state and ZIP.')
+        return
+      }
+
+      const property = {
+        address: match.matchedAddress,
+        longitude: match.coordinates.x,
+        latitude: match.coordinates.y,
+      }
+
+      setLocatedProperty(property)
+      setSearchStatus('Address located. Parcel lookup is the next layer.')
+
+      const map = mapRef.current
+      if (map) {
+        markerRef.current?.remove()
+        markerRef.current = new Marker({ color: '#d95f82' })
+          .setLngLat([property.longitude, property.latitude])
+          .addTo(map)
+
+        map.flyTo({
+          center: [property.longitude, property.latitude],
+          zoom: 16.2,
+          essential: true,
+        })
+      }
+    } catch {
+      setLocatedProperty(null)
+      setSearchStatus('ATLAS could not reach the address locator. Try again in a moment.')
+    } finally {
+      setIsSearching(false)
+    }
   }
 
   return (
@@ -46,30 +138,32 @@ function App() {
                 id="property-address"
                 value={address}
                 onChange={(event) => setAddress(event.target.value)}
-                placeholder="Enter a street address"
+                placeholder="1234 Country Rd, Williamsburg, OH 45176"
                 autoComplete="street-address"
               />
-              <button type="submit">Analyze property</button>
+              <button type="submit" disabled={isSearching}>
+                {isSearching ? 'Locating…' : 'Analyze property'}
+              </button>
             </div>
-            <p>ATLAS will separate verified records, calculated findings and items that still require verification.</p>
+            <p className={searchStatus ? 'search-status active' : 'search-status'}>
+              {searchStatus || 'ATLAS separates verified records, calculated findings and items that still require verification.'}
+            </p>
           </form>
         </div>
 
-        <aside className="preview-card" aria-label="ATLAS report preview">
-          <div className="preview-map">
-            <span className="parcel parcel-one" />
-            <span className="parcel parcel-two" />
-            <span className="map-label">PROPERTY MAP</span>
-          </div>
-          <div className="preview-content">
-            <p className="mini-label">ATLAS REPORT</p>
-            <h2>One property. The full picture.</h2>
-            <div className="status-grid">
-              <span><b>✓</b> Verified records</span>
-              <span><b>◉</b> Likely uses</span>
-              <span><b>?</b> Verify locally</span>
-              <span><b>!</b> Potential problems</span>
+        <aside className="preview-card map-card" aria-label="ATLAS property map">
+          <div className="live-map" ref={mapContainer} />
+          <div className="map-overlay-label">ATLAS PROPERTY MAP</div>
+          <div className="preview-content map-summary">
+            <div>
+              <p className="mini-label">ADDRESS LOCATION</p>
+              <h2>{locatedProperty ? locatedProperty.address : 'Search a property to begin.'}</h2>
             </div>
+            {locatedProperty ? (
+              <span className="location-pill">Located · parcel next</span>
+            ) : (
+              <span className="location-pill muted">Ready</span>
+            )}
           </div>
         </aside>
       </section>
