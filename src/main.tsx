@@ -7,6 +7,7 @@ import './report-polish.css'
 import './intelligence.css'
 import './research-evidence.css'
 import './homeowner.css'
+import './owner-overrides.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
