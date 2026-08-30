@@ -139,26 +139,57 @@ function jsonp<T>(baseUrl: string, params: Record<string, string>, timeoutMs = 1
 }
 
 function normalizeCounty(value: unknown) {
-  return typeof value === 'string'
-    ? value.replace(/\s+County$/i, '').trim()
-    : null
+  return typeof value === 'string' ? value.replace(/\s+County$/i, '').trim() : null
 }
 
 function extractCounty(attributes: Record<string, unknown>) {
   const raw = [
-    attributes.Subregion,
-    attributes.subregion,
-    attributes.County,
-    attributes.COUNTY,
-    attributes.county,
-    attributes.NAME,
-    attributes.Name,
-    attributes.name,
-    attributes.COUNTY_NAM,
-    attributes.COUNTYNAME,
+    attributes.Subregion, attributes.subregion, attributes.County, attributes.COUNTY,
+    attributes.county, attributes.NAME, attributes.Name, attributes.name,
+    attributes.COUNTY_NAM, attributes.COUNTYNAME,
   ].find((value) => typeof value === 'string' && value.trim())
-
   return normalizeCounty(raw)
+}
+
+function firstAttribute(attributes: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = attributes[key]
+    if (value !== undefined && value !== null && value !== '') return value
+  }
+  return null
+}
+
+function normalizeParcelProperties(attributes: Record<string, unknown>, provider: ParcelProvider) {
+  // Preserve every source field, while adding a small canonical vocabulary used by ATLAS.
+  // This lets Brown's PARCELNUMB, Adams's PID and Warren's SIDWELL fields render the
+  // same way without hiding the original county schema or provenance.
+  const parcelNumber = firstAttribute(attributes, [
+    'ParcelNumber', 'PARCELNUMB', 'PARCELID', 'PARCEL_ID', 'PARCELNO', 'PARCEL_NO',
+    'PID', 'PIN', 'PRCLID', 'SIDWELL_C', 'SDWLL_NBR', 'MSIDWL', 'PARNUM', 'TREASID', 'ID',
+  ])
+  const acres = firstAttribute(attributes, [
+    'ACRES', 'Acres', 'acres', 'ACREAGE', 'Acreage', 'GISACRE', 'CALCACRES', 'DEED_ACRE',
+  ])
+  const township = firstAttribute(attributes, [
+    'TOWNSHIP', 'Township', 'TOWNSHIP_NAME', 'TWP_NAME', 'MUNICIPALITY_NAME',
+  ])
+  const zoning = firstAttribute(attributes, [
+    'ZoneType', 'ZONING', 'Zoning', 'ZONE', 'ZONE_CODE', 'ZONING_CODE',
+  ])
+  const landUse = firstAttribute(attributes, [
+    'LAND_USE', 'LandUse', 'LANDUSE', 'USE_CODE_DSC', 'PROP_CLASS_DSC', 'CLASS_CODE',
+  ])
+
+  return {
+    ...attributes,
+    ParcelNumber: attributes.ParcelNumber ?? parcelNumber,
+    ACRES: attributes.ACRES ?? acres,
+    TOWNSHIP: attributes.TOWNSHIP ?? township,
+    ZONING: attributes.ZONING ?? zoning,
+    LAND_USE: attributes.LAND_USE ?? landUse,
+    _ATLAS_PROVIDER: provider.name,
+    _ATLAS_EVIDENCE: provider.evidence,
+  }
 }
 
 async function resolveOhioCounty(longitude: number, latitude: number): Promise<string | null> {
@@ -183,7 +214,6 @@ async function resolveOhioCounty(longitude: number, latitude: number): Promise<s
       // Try the next official statewide county boundary source.
     }
   }
-
   return null
 }
 
@@ -196,7 +226,6 @@ export async function resolveOhioAddress(address: string): Promise<LocatedProper
         outSR: '4326',
         maxLocations: '5',
       })
-
       if (data.error) continue
 
       const candidate = data.candidates?.find((item) =>
@@ -204,10 +233,7 @@ export async function resolveOhioAddress(address: string): Promise<LocatedProper
         typeof item.location?.y === 'number' &&
         (item.score ?? 0) >= 60,
       )
-
-      if (!candidate || typeof candidate.location?.x !== 'number' || typeof candidate.location?.y !== 'number') {
-        continue
-      }
+      if (!candidate || typeof candidate.location?.x !== 'number' || typeof candidate.location?.y !== 'number') continue
 
       const longitude = candidate.location.x
       const latitude = candidate.location.y
@@ -225,28 +251,17 @@ export async function resolveOhioAddress(address: string): Promise<LocatedProper
       // Try the next statewide Ohio locator.
     }
   }
-
   return null
 }
 
 function ringsToGeoJson(rings: number[][][]): ParcelFeature['geometry'] {
-  return {
-    type: 'Polygon',
-    coordinates: rings,
-  }
+  return { type: 'Polygon', coordinates: rings }
 }
 
-export async function resolveCountyParcel(
-  county: string,
-  longitude: number,
-  latitude: number,
-): Promise<ParcelResult> {
+export async function resolveCountyParcel(county: string, longitude: number, latitude: number): Promise<ParcelResult> {
   const key = county.trim().toLowerCase()
   const provider = PARCEL_PROVIDERS[key]
-
-  if (!provider) {
-    return { supported: false, county, parcel: null }
-  }
+  if (!provider) return { supported: false, county, parcel: null }
 
   try {
     const data = await jsonp<{
@@ -265,16 +280,11 @@ export async function resolveCountyParcel(
       outFields: provider.fields,
     })
 
-    if (data.error) {
-      return { supported: true, county, provider: provider.name, parcel: null, error: 'County GIS returned an error' }
-    }
+    if (data.error) return { supported: true, county, provider: provider.name, parcel: null, error: 'County GIS returned an error' }
 
     const feature = data.features?.[0]
     const rings = feature?.geometry?.rings
-
-    if (!feature || !rings?.length) {
-      return { supported: true, county, provider: provider.name, parcel: null }
-    }
+    if (!feature || !rings?.length) return { supported: true, county, provider: provider.name, parcel: null }
 
     return {
       supported: true,
@@ -282,7 +292,7 @@ export async function resolveCountyParcel(
       provider: provider.name,
       parcel: {
         geometry: ringsToGeoJson(rings),
-        properties: feature.attributes ?? {},
+        properties: normalizeParcelProperties(feature.attributes ?? {}, provider),
       },
     }
   } catch (error) {
