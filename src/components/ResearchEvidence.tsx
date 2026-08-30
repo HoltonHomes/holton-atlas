@@ -1,5 +1,6 @@
 import type { CountyPropertyRecord } from '../services/countyRecords'
 import type { ResearchProfile } from '../services/researchProfile'
+import { buildAtlasValuation } from '../services/valuationEngine'
 
 function money(value: unknown) {
   const number = Number(value)
@@ -29,8 +30,45 @@ export function ResearchSourcePanel({ profile }: { profile: ResearchProfile }) {
       </div>
       <div className="research-source-links">
         {profile.sources.map((source) => (
-          <a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.name} ↗</a>
+          <a key={`${source.name}-${source.url}`} href={source.url} target="_blank" rel="noreferrer">{source.name} ↗</a>
         ))}
+      </div>
+    </section>
+  )
+}
+
+function AtlasValuationCard({ profile }: { profile: ResearchProfile }) {
+  const valuation = buildAtlasValuation(profile)
+  if (!valuation) return null
+
+  return (
+    <section className="atlas-valuation-card">
+      <div className="atlas-value-main">
+        <div>
+          <span className="card-kicker">ATLAS ESTIMATED MARKET VALUE</span>
+          <h3>{money(valuation.estimate)}</h3>
+          <p>Likely range <strong>{money(valuation.rangeLow)} – {money(valuation.rangeHigh)}</strong> · {valuation.confidence} confidence</p>
+        </div>
+        <span className={`valuation-confidence ${valuation.confidence.toLowerCase()}`}>{valuation.confidence}</span>
+      </div>
+
+      <div className="valuation-evidence-grid">
+        {valuation.evidence.map((row) => (
+          <article key={row.label}>
+            <div className="valuation-row-top"><span>{row.label}</span><strong>{Math.round(row.weight * 100)}%</strong></div>
+            <h4>{money(row.value)}</h4>
+            <div className="weight-track"><i style={{ width: `${Math.max(4, row.weight * 100)}%` }} /></div>
+            <p>{row.detail}</p>
+          </article>
+        ))}
+      </div>
+
+      <div className="valuation-method-note">
+        <strong>How ATLAS weights value</strong>
+        <p>{valuation.note}</p>
+        {valuation.marketTrendAnnualPct != null && valuation.subjectSaleOriginal && (
+          <p>The {money(valuation.subjectSaleOriginal)} subject closing is time-adjusted using the reviewed local quality-adjusted trend ({valuation.marketTrendAnnualPct.toFixed(1)}% annual) to about {money(valuation.subjectSaleAdjusted)} before weighting.</p>
+        )}
       </div>
     </section>
   )
@@ -47,9 +85,11 @@ export function ResearchHomeValueSection({ profile }: { profile: ResearchProfile
   return (
     <div className="data-section">
       <div className="section-heading">
-        <div><p className="eyebrow">HOME & VALUE</p><h2>Facts first. Estimates second.</h2></div>
-        <p>ATLAS separates corroborated home characteristics, county tax values, market-history facts and automated estimates so unlike numbers do not get mixed together.</p>
+        <div><p className="eyebrow">HOME & VALUE</p><h2>Market evidence, weighted by what it actually proves.</h2></div>
+        <p>A real closed sale outranks an AVM. Recent comparable closings update the anchor. Automated estimates are supporting evidence. County appraisal stays in the tax context and receives no market-value weight.</p>
       </div>
+
+      <AtlasValuationCard profile={profile} />
 
       <div className="source-plan-grid researched-fact-grid">
         <article className="intel-card">
@@ -60,17 +100,17 @@ export function ResearchHomeValueSection({ profile }: { profile: ResearchProfile
         </article>
 
         <article className="intel-card">
-          <span className="card-kicker">COUNTY VALUES</span>
+          <span className="card-kicker">COUNTY VALUES · NOT MARKET WEIGHT</span>
           <h3>{money(valuation.countyAppraisedValue)}</h3>
           <p>County appraised value. Taxable assessed value: {money(valuation.taxableAssessedValue)}. Land: {money(valuation.assessedLand)} · improvements: {money(valuation.assessedImprovements)}.</p>
-          <span className="evidence-line">Appraisal and taxable assessment are different numbers.</span>
+          <span className="evidence-line">Useful for taxes. 0% weight in the ATLAS market estimate.</span>
         </article>
 
         <article className="intel-card">
-          <span className="card-kicker">LAST SALE</span>
+          <span className="card-kicker">LAST CLOSED SUBJECT SALE</span>
           <h3>{money(sale.price)}</h3>
           <p>MLS close: {dateLabel(sale.mlsCloseDate)}. Public-record transfer: {dateLabel(sale.publicRecordTransferDate)}.</p>
-          <span className="evidence-line">Different dates can describe different events.</span>
+          <span className="evidence-line">Observed market transaction; appraisal amount/status is not assumed.</span>
         </article>
       </div>
 
@@ -84,8 +124,8 @@ export function ResearchHomeValueSection({ profile }: { profile: ResearchProfile
       </section>
 
       <section className="estimate-band">
-        <div><span className="card-kicker">THIRD-PARTY ESTIMATES · NOT A CMA</span><h3>{money(estimates.zillow)} Zillow estimate</h3></div>
-        <div><span>Other Realtor.com valuation providers</span><strong>{Array.isArray(estimates.realtorProviders) ? `${money(Math.min(...estimates.realtorProviders))} – ${money(Math.max(...estimates.realtorProviders))}` : '—'}</strong></div>
+        <div><span className="card-kicker">RAW THIRD-PARTY AVMS · SUPPORTING EVIDENCE</span><h3>{money(estimates.zillow)} Zillow estimate</h3></div>
+        <div><span>Realtor.com valuation providers</span><strong>{Array.isArray(estimates.realtorProviders) ? `${money(Math.min(...estimates.realtorProviders))} – ${money(Math.max(...estimates.realtorProviders))}` : '—'}</strong></div>
       </section>
 
       <ResearchSourcePanel profile={profile} />
