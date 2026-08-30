@@ -3,6 +3,8 @@ import type { FormEvent } from 'react'
 import { Map as MapLibreMap, Marker, NavigationControl } from 'maplibre-gl'
 import type { GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { resolveCountyParcel, resolveOhioAddress } from './services/ohioProperty'
+import type { LocatedProperty, ParcelFeature } from './services/ohioProperty'
 
 const capabilities = [
   'Value & CMA',
@@ -12,28 +14,6 @@ const capabilities = [
   'Soils & Water',
   'Rural Potential',
 ]
-
-type LocatedProperty = {
-  address: string
-  latitude: number
-  longitude: number
-  county: string | null
-  score: number | null
-  source: string
-}
-
-type ParcelFeature = {
-  geometry: any
-  properties: Record<string, unknown>
-}
-
-type ParcelResult = {
-  supported: boolean
-  county: string
-  provider?: string
-  parcel: ParcelFeature | null
-  error?: string
-}
 
 function money(value: unknown) {
   const number = Number(value)
@@ -139,28 +119,14 @@ function App() {
 
     setIsSearching(true)
     clearParcel()
-    setSearchStatus('Locating property with Ohio address records…')
+    setSearchStatus('Locating property with statewide Ohio records…')
 
     try {
-      const geocodeResponse = await fetch(`/api/geocode?address=${encodeURIComponent(query)}`)
-      const geocodeData = await geocodeResponse.json() as {
-        match?: LocatedProperty | null
-        error?: string
-        detail?: string
-      }
+      const property = await resolveOhioAddress(query)
 
-      if (!geocodeResponse.ok) {
-        throw new Error(geocodeData.detail || geocodeData.error || `Resolver returned HTTP ${geocodeResponse.status}`)
-      }
-
-      const property = geocodeData.match
       if (!property) {
         setLocatedProperty(null)
-        setSearchStatus(
-          geocodeData.detail
-            ? `No address match. ${geocodeData.detail}`
-            : 'No confident Ohio address match found. Try the full street address, city and ZIP.',
-        )
+        setSearchStatus('No confident Ohio address match found. Try the full street address, city and ZIP.')
         return
       }
 
@@ -176,24 +142,21 @@ function App() {
       }
 
       if (!property.county) {
-        setSearchStatus(`Address verified by ${property.source}. County could not be resolved automatically yet.`)
+        setSearchStatus(`Address matched through ${property.source}. County could not be resolved automatically yet.`)
         return
       }
 
-      setSearchStatus(`Address verified in ${property.county} County by ${property.source}. Checking parcel records…`)
+      setSearchStatus(`Address verified in ${property.county} County. Checking parcel records…`)
 
-      const parcelResponse = await fetch(
-        `/api/parcel?county=${encodeURIComponent(property.county)}&longitude=${property.longitude}&latitude=${property.latitude}`,
-      )
-      const parcelData = await parcelResponse.json() as ParcelResult
-
-      if (!parcelResponse.ok) {
-        setSearchStatus(`Address verified in ${property.county} County. Parcel service is temporarily unavailable.`)
-        return
-      }
+      const parcelData = await resolveCountyParcel(property.county, property.longitude, property.latitude)
 
       if (!parcelData.supported) {
         setSearchStatus(`Address verified in ${property.county} County. ATLAS recognized the county; its live parcel provider is the next data connection.`)
+        return
+      }
+
+      if (parcelData.error) {
+        setSearchStatus(`Address verified in ${property.county} County. ${parcelData.provider ?? 'County GIS'} could not return a parcel right now.`)
         return
       }
 
@@ -209,11 +172,7 @@ function App() {
     } catch (error) {
       setLocatedProperty(null)
       clearParcel()
-      setSearchStatus(
-        error instanceof Error
-          ? `ATLAS resolver error: ${error.message}`
-          : 'ATLAS could not reach the Ohio property resolver.',
-      )
+      setSearchStatus(`ATLAS search error: ${error instanceof Error ? error.message : 'Unable to resolve property'}`)
     } finally {
       setIsSearching(false)
     }
