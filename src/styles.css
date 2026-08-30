@@ -85,6 +85,81 @@ h1 { margin: 0; max-width: 720px; font-size: clamp(48px, 6.5vw, 82px); line-heig
 .search-card > p { margin: 10px 8px 3px; color: #81858c; font-size: 11px; line-height: 1.45; }
 .search-status.active { color: #4f5968; font-weight: 650; }
 
+.address-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+  margin-top: 14px;
+  color: #687180;
+  font-size: 11px;
+  font-weight: 700;
+}
+.address-proof > span:not(.evidence-badge) {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.65);
+  border: 1px solid rgba(28,43,69,.07);
+}
+.evidence-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.evidence-badge.verified {
+  background: rgba(217,95,130,.12);
+  color: #b74466;
+}
+
+.parcel-facts {
+  max-width: 690px;
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid rgba(28,43,69,.08);
+  border-radius: 18px;
+  background: rgba(255,255,255,.78);
+  box-shadow: 0 18px 55px rgba(28,43,69,.06);
+}
+.fact-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 15px;
+}
+.fact-heading p { margin: 0; color: #747b86; font-size: 11px; font-weight: 700; }
+.facts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.facts-grid div {
+  min-width: 0;
+  padding: 13px;
+  border-radius: 12px;
+  background: #faf8f5;
+}
+.facts-grid span {
+  display: block;
+  margin-bottom: 5px;
+  color: #878b92;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.facts-grid strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
 .preview-card {
   overflow: hidden;
   border-radius: 28px;
@@ -92,43 +167,8 @@ h1 { margin: 0; max-width: 720px; font-size: clamp(48px, 6.5vw, 82px); line-heig
   box-shadow: 0 35px 100px rgba(28,43,69,.14);
   transform: rotate(1.2deg);
 }
-.preview-map {
-  position: relative;
-  height: 330px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 68% 25%, rgba(217,95,130,.14), transparent 22%),
-    repeating-linear-gradient(115deg, transparent 0 28px, rgba(255,255,255,.15) 29px 31px),
-    linear-gradient(140deg, #777d6b 0%, #a9a993 34%, #6f7b65 35%, #536454 65%, #837963 100%);
-}
-.preview-map::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent 48%, rgba(241,230,210,.75) 49%, rgba(241,230,210,.75) 54%, transparent 55%);
-  transform: rotate(-18deg) scale(1.4);
-}
-.parcel { position: absolute; border: 3px solid #f8a9be; background: rgba(217,95,130,.12); }
-.parcel-one { width: 190px; height: 170px; left: 18%; top: 23%; clip-path: polygon(10% 4%, 94% 18%, 86% 88%, 20% 95%, 0 48%); }
-.parcel-two { width: 135px; height: 108px; right: 8%; bottom: 7%; opacity: .5; clip-path: polygon(12% 0, 100% 14%, 82% 100%, 0 82%); }
-.map-label {
-  position: absolute;
-  left: 18px;
-  bottom: 18px;
-  padding: 9px 12px;
-  border-radius: 10px;
-  background: rgba(28,43,69,.9);
-  color: white;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .13em;
-}
 .preview-content { padding: 26px 28px 30px; }
 .mini-label { margin: 0 0 7px; color: #d95f82; font-size: 10px; font-weight: 850; letter-spacing: .15em; }
-.preview-content h2 { margin: 0 0 22px; font-size: 32px; }
-.status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.status-grid span { padding: 11px 12px; border-radius: 11px; background: #faf8f5; color: #5e6470; font-size: 12px; }
-.status-grid b { color: #d95f82; margin-right: 5px; }
 
 .map-card { position: relative; transform: rotate(.55deg); }
 .live-map { width: 100%; height: 380px; background: #d9d8d1; }
@@ -167,6 +207,7 @@ h1 { margin: 0; max-width: 720px; font-size: clamp(48px, 6.5vw, 82px); line-heig
   letter-spacing: .06em;
 }
 .location-pill.muted { background: #f3f1ed; color: #777b83; }
+.location-pill.verified-pill { background: #1c2b45; color: #fff; }
 .maplibregl-ctrl-group { border-radius: 11px !important; overflow: hidden; box-shadow: 0 8px 25px rgba(28,43,69,.14) !important; }
 .maplibregl-ctrl-attrib { font-size: 9px !important; }
 
@@ -208,8 +249,8 @@ h1 { margin: 0; max-width: 720px; font-size: clamp(48px, 6.5vw, 82px); line-heig
   .lede { font-size: 16px; }
   .search-row { flex-direction: column; }
   .search-row button { padding: 17px 18px; }
-  .preview-map, .live-map { height: 290px; }
-  .status-grid, .use-grid { grid-template-columns: 1fr; }
+  .live-map { height: 290px; }
   .map-summary { align-items: flex-start; flex-direction: column; }
+  .facts-grid { grid-template-columns: repeat(2, 1fr); }
   .principle { margin-top: 75px; }
 }
