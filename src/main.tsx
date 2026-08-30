@@ -6,6 +6,7 @@ import './parcel.css'
 import './report-polish.css'
 import './intelligence.css'
 import './research-evidence.css'
+import './homeowner.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
