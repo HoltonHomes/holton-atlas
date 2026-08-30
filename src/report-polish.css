@@ -1,0 +1,254 @@
+/* Final-pass visual hierarchy for the ATLAS post-search report. */
+
+.report-mode .nav-shell {
+  padding-top: 18px;
+  padding-bottom: 14px;
+}
+
+.report-mode .property-shell {
+  margin-top: 8px;
+}
+
+.report-mode .property-topbar {
+  padding: 10px 12px;
+  border-radius: 15px;
+  background: rgba(255,255,255,.9);
+  box-shadow: 0 10px 32px rgba(28,43,69,.045);
+}
+
+.report-mode .compact-search {
+  width: min(720px, 100%);
+}
+
+.report-mode .compact-search input {
+  padding: 12px 14px;
+  border-radius: 11px;
+  font-size: 14px;
+}
+
+.report-mode .compact-search button {
+  min-width: 88px;
+  border-radius: 11px;
+}
+
+.report-mode .property-identity {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+  gap: 38px;
+  align-items: center;
+  padding: 34px 2px 25px;
+}
+
+.report-mode .property-identity h1 {
+  max-width: 760px;
+  font-size: clamp(38px, 4.15vw, 56px);
+  line-height: .99;
+  text-wrap: balance;
+}
+
+.report-mode .property-identity .eyebrow {
+  margin-bottom: 10px;
+}
+
+.report-mode .identity-meta {
+  margin-top: 15px;
+  gap: 7px;
+}
+
+.report-mode .identity-meta > span:not(.evidence-badge),
+.report-mode .evidence-badge {
+  padding: 6px 9px;
+}
+
+.report-mode .quick-facts {
+  gap: 9px;
+}
+
+.report-mode .quick-facts div {
+  min-height: 78px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-radius: 14px;
+  background: rgba(255,255,255,.94);
+  box-shadow: 0 8px 26px rgba(28,43,69,.035);
+}
+
+.report-mode .quick-facts span {
+  margin-bottom: 7px;
+}
+
+.report-mode .quick-facts strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -.025em;
+}
+
+.report-mode .property-hero-grid {
+  grid-template-columns: minmax(0, 1.8fr) minmax(295px, .62fr);
+  gap: 14px;
+}
+
+.report-mode .report-map-card,
+.report-mode .property-summary-card {
+  border-radius: 22px;
+}
+
+.report-mode .report-map-card,
+.report-mode .report-map {
+  min-height: 500px;
+  height: 500px;
+}
+
+.report-mode .map-overlay-label {
+  top: 15px;
+  left: 15px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 9px;
+}
+
+.report-mode .map-bottom-bar {
+  left: 15px;
+  right: 15px;
+  bottom: 15px;
+  padding: 13px 14px;
+  border-radius: 13px;
+}
+
+.report-mode .property-summary-card {
+  padding: 21px;
+}
+
+.report-mode .summary-heading {
+  padding-bottom: 16px;
+}
+
+.report-mode .summary-heading span {
+  font-size: 25px;
+}
+
+.report-mode .summary-list div {
+  padding: 15px 0;
+}
+
+.report-mode .summary-list strong {
+  font-size: 13px;
+}
+
+.report-mode .status-note {
+  padding: 13px;
+  font-size: 10.5px;
+}
+
+.report-mode .report-nav {
+  margin-top: 22px;
+  padding: 6px;
+  border-radius: 15px;
+}
+
+.report-mode .report-nav button {
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.report-mode .report-content {
+  margin-top: 38px;
+}
+
+.report-mode .section-heading {
+  margin-bottom: 20px;
+}
+
+.report-mode .section-heading h2 {
+  font-size: clamp(34px, 3.6vw, 46px);
+}
+
+.report-mode .overview-grid {
+  gap: 12px;
+}
+
+.report-mode .intel-card {
+  padding: 22px;
+  border-radius: 19px;
+  box-shadow: 0 18px 46px rgba(28,43,69,.055);
+}
+
+.report-mode .feature-card h3 {
+  margin-top: 11px;
+  font-size: 27px;
+}
+
+.report-mode .feature-card p {
+  min-height: 52px;
+  font-size: 12.5px;
+}
+
+.report-mode .rural-preview {
+  margin-top: 42px;
+  padding-top: 34px;
+}
+
+.report-mode .use-grid.refined {
+  gap: 9px;
+}
+
+.report-mode .use-card {
+  padding: 15px;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(28,43,69,.03);
+}
+
+@media (max-width: 900px) {
+  .report-mode .property-identity {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
+  .report-mode .property-identity h1 {
+    font-size: clamp(36px, 8vw, 52px);
+  }
+
+  .report-mode .property-hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-mode .property-summary-card {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .report-mode .property-topbar {
+    align-items: stretch;
+  }
+
+  .report-mode .compact-search {
+    width: 100%;
+  }
+
+  .report-mode .report-status {
+    display: none;
+  }
+
+  .report-mode .property-identity {
+    padding-top: 26px;
+  }
+
+  .report-mode .quick-facts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .report-mode .report-map-card,
+  .report-mode .report-map {
+    min-height: 390px;
+    height: 390px;
+  }
+
+  .report-mode .overview-grid,
+  .report-mode .use-grid.refined {
+    grid-template-columns: 1fr;
+  }
+}
