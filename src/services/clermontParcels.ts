@@ -1,5 +1,5 @@
 export type ClermontParcel = {
-  geometry: GeoJSON.Geometry
+  geometry: unknown
   properties: {
     PIN?: string | null
     PRCLID?: string | null
