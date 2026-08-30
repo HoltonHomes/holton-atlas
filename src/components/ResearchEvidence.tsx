@@ -17,7 +17,12 @@ function dateLabel(value: unknown) {
 
 export function ResearchBadge({ profile }: { profile: ResearchProfile | null }) {
   if (!profile) return null
-  return <span className="research-badge">Research corroborated</span>
+  const valuation = buildAtlasValuation(profile)
+  return (
+    <span className={valuation ? 'research-badge value-badge' : 'research-badge'}>
+      {valuation ? `ATLAS est. ${money(valuation.estimate)} · ${valuation.confidence}` : 'Research corroborated'}
+    </span>
+  )
 }
 
 export function ResearchSourcePanel({ profile }: { profile: ResearchProfile }) {
