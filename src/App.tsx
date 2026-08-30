@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Map as MapLibreMap, Marker, NavigationControl } from 'maplibre-gl'
+import { LngLatBounds, Map as MapLibreMap, Marker, NavigationControl } from 'maplibre-gl'
 import type { GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { resolveCountyParcel, resolveOhioAddress } from './services/ohioProperty'
@@ -14,6 +14,28 @@ const capabilities = [
   'Soils & Water',
   'Rural Potential',
 ]
+
+const aerialStyle = {
+  version: 8 as const,
+  sources: {
+    'esri-world-imagery': {
+      type: 'raster' as const,
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
+      attribution: 'Imagery © Esri and contributors',
+      maxzoom: 20,
+    },
+  },
+  layers: [
+    {
+      id: 'aerial',
+      type: 'raster' as const,
+      source: 'esri-world-imagery',
+    },
+  ],
+}
 
 function money(value: unknown) {
   const number = Number(value)
@@ -39,6 +61,19 @@ function numericValue(properties: Record<string, unknown>, keys: string[]) {
   return Number.isFinite(number) ? number : null
 }
 
+function extendBounds(bounds: LngLatBounds, coordinates: unknown) {
+  if (!Array.isArray(coordinates)) return
+  if (
+    coordinates.length >= 2 &&
+    typeof coordinates[0] === 'number' &&
+    typeof coordinates[1] === 'number'
+  ) {
+    bounds.extend([coordinates[0], coordinates[1]])
+    return
+  }
+  coordinates.forEach((coordinate) => extendBounds(bounds, coordinate))
+}
+
 function App() {
   const [address, setAddress] = useState('')
   const [locatedProperty, setLocatedProperty] = useState<LocatedProperty | null>(null)
@@ -55,10 +90,11 @@ function App() {
 
     const map = new MapLibreMap({
       container: mapContainer.current,
-      style: 'https://tiles.openfreemap.org/styles/liberty',
+      style: aerialStyle,
       center: [-84.22, 39.13],
       zoom: 8.5,
       attributionControl: {},
+      maxZoom: 20,
     })
 
     map.addControl(new NavigationControl({ showCompass: false }), 'top-right')
@@ -94,22 +130,31 @@ function App() {
     const existingSource = map.getSource('atlas-parcel') as GeoJSONSource | undefined
     if (existingSource) {
       existingSource.setData(feature)
-      return
+    } else {
+      map.addSource('atlas-parcel', { type: 'geojson', data: feature })
+      map.addLayer({
+        id: 'atlas-parcel-fill',
+        type: 'fill',
+        source: 'atlas-parcel',
+        paint: { 'fill-color': '#d95f82', 'fill-opacity': 0.18 },
+      })
+      map.addLayer({
+        id: 'atlas-parcel-line',
+        type: 'line',
+        source: 'atlas-parcel',
+        paint: { 'line-color': '#ff6f9c', 'line-width': 4 },
+      })
     }
 
-    map.addSource('atlas-parcel', { type: 'geojson', data: feature })
-    map.addLayer({
-      id: 'atlas-parcel-fill',
-      type: 'fill',
-      source: 'atlas-parcel',
-      paint: { 'fill-color': '#d95f82', 'fill-opacity': 0.14 },
-    })
-    map.addLayer({
-      id: 'atlas-parcel-line',
-      type: 'line',
-      source: 'atlas-parcel',
-      paint: { 'line-color': '#d95f82', 'line-width': 4 },
-    })
+    const bounds = new LngLatBounds()
+    extendBounds(bounds, (nextParcel.geometry as { coordinates?: unknown }).coordinates)
+    if (!bounds.isEmpty()) {
+      map.fitBounds(bounds, {
+        padding: { top: 48, right: 48, bottom: 48, left: 48 },
+        maxZoom: 18.5,
+        duration: 950,
+      })
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -247,7 +292,7 @@ function App() {
 
         <aside className="preview-card map-card" aria-label="ATLAS property map">
           <div className="live-map" ref={mapContainer} />
-          <div className="map-overlay-label">ATLAS PROPERTY MAP</div>
+          <div className="map-overlay-label">ATLAS AERIAL + PARCEL</div>
           <div className="preview-content map-summary">
             <div>
               <p className="mini-label">{parcel ? 'VERIFIED PARCEL' : locatedProperty ? 'VERIFIED ADDRESS' : 'OHIO PROPERTY SEARCH'}</p>
