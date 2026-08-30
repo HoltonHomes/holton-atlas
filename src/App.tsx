@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { FormEvent } from 'react'
 import { Map as MapLibreMap, Marker, NavigationControl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -34,7 +35,7 @@ function App() {
       style: 'https://tiles.openfreemap.org/styles/liberty',
       center: [-84.22, 39.13],
       zoom: 8.5,
-      attributionControl: true,
+      attributionControl: {},
     })
 
     map.addControl(new NavigationControl({ showCompass: false }), 'top-right')
