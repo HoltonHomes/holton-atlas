@@ -302,7 +302,8 @@ function App() {
   const bedrooms = researchNumber(researchProfile, ['homeFacts', 'bedrooms']) ?? countyRecord?.dwelling?.bedrooms
   const fullBaths = researchNumber(researchProfile, ['homeFacts', 'fullBathrooms']) ?? countyRecord?.dwelling?.fullBaths
   const stories = researchNumber(researchProfile, ['homeFacts', 'stories']) ?? countyRecord?.dwelling?.stories
-  const zoning = researchText(researchProfile, ['zoning', 'value']) ?? String(firstValue(properties, ['ZoneType', 'ZONING', 'Zoning', 'ZONE']) ?? '') || null
+  const parcelZoning = firstValue(properties, ['ZoneType', 'ZONING', 'Zoning', 'ZONE'])
+  const zoning = researchText(researchProfile, ['zoning', 'value']) ?? (parcelZoning ? String(parcelZoning) : null)
   const salePrice = researchNumber(researchProfile, ['sale', 'price']) ?? countyRecord?.salePrice
   const saleDate = researchText(researchProfile, ['sale', 'mlsCloseDate']) ?? countyRecord?.saleDate
   const annualTaxDisplay = researchText(researchProfile, ['tax', 'annualTaxDisplay'])
