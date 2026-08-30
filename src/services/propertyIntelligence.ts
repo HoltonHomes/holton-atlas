@@ -27,6 +27,10 @@ export const INTELLIGENCE_OVERLAYS = {
     tile: 'https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?f=image&format=png32&transparent=true&renderingRule=%7B%22rasterFunction%22%3A%22Hillshade%20Gray%22%7D&bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256%2C256',
     opacity: 0.72,
   },
+  Topography: {
+    tile: 'https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?f=image&format=png32&transparent=true&renderingRule=%7B%22rasterFunction%22%3A%22Preset%2010ft%20Contour%20Interval%22%7D&bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256%2C256',
+    opacity: 0.82,
+  },
   Slope: {
     tile: 'https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?f=image&format=png32&transparent=true&renderingRule=%7B%22rasterFunction%22%3A%22Slope%20Map%22%7D&bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256%2C256',
     opacity: 0.62,
@@ -34,6 +38,10 @@ export const INTELLIGENCE_OVERLAYS = {
   Soils: {
     tile: 'https://apps.geo.fpac.usda.gov/nrcs-geodata/rest/services/soils/cg_soils/MapServer/export?dpi=96&transparent=true&format=png32&layers=show%3A0&bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256%2C256&f=image',
     opacity: 0.55,
+  },
+  Water: {
+    tile: 'https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer/export?dpi=96&transparent=true&format=png32&layers=show%3A3%2C9&bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256%2C256&f=image',
+    opacity: 0.72,
   },
   Flood: {
     tile: 'https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/export?dpi=96&transparent=true&format=png32&layers=show%3A28&bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256%2C256&f=image',
@@ -152,7 +160,7 @@ async function getWetlands(longitude: number, latitude: number): Promise<Intelli
       'https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands/MapServer/0/query',
       longitude,
       latitude,
-      'ATTRIBUTE,WETLAND_TYPE,WETLAND_TY,ACRES',
+      '*',
     )
     if (!attrs) {
       return { key: 'wetlands', label: 'Wetlands', status: 'Likely', value: 'No NWI wetland at address point', detail: 'No mapped NWI wetland polygon intersects the geocoded address point. This does not rule out wetlands elsewhere on the parcel or unmapped field conditions.', source: 'USFWS National Wetlands Inventory' }
@@ -177,7 +185,7 @@ async function getTerrain(longitude: number, latitude: number): Promise<Intellig
     if (!response.ok) throw new Error('Elevation service unavailable')
     const data = await response.json() as { value?: number; resolution?: number }
     if (typeof data.value !== 'number' || !Number.isFinite(data.value)) throw new Error('No elevation returned')
-    return { key: 'terrain', label: 'Terrain', status: 'Likely', value: `${Math.round(data.value).toLocaleString()} ft elevation`, detail: `USGS 3DEP interpolated point elevation${data.resolution ? ` at roughly ${data.resolution} m source resolution` : ''}. Use the Terrain and Slope layers to read the surrounding landform; this is not a surveyed elevation.`, source: 'USGS 3DEP / EPQS' }
+    return { key: 'terrain', label: 'Terrain', status: 'Likely', value: `${Math.round(data.value).toLocaleString()} ft elevation`, detail: `USGS 3DEP interpolated point elevation${data.resolution ? ` at roughly ${data.resolution} m source resolution` : ''}. Use the Terrain, Topography and Slope layers to read the surrounding landform; this is not a surveyed elevation.`, source: 'USGS 3DEP / EPQS' }
   } catch {
     return { key: 'terrain', label: 'Terrain', status: 'Requires Verification', value: 'Elevation source unavailable', detail: 'USGS elevation data could not be reached during this check. Terrain map layers remain available.', source: 'USGS 3DEP' }
   }
