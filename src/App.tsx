@@ -9,6 +9,8 @@ import { getPropertyIntelligence, INTELLIGENCE_OVERLAYS } from './services/prope
 import type { PropertyIntelligence } from './services/propertyIntelligence'
 import { getCountyPropertyRecord } from './services/countyRecords'
 import type { CountyPropertyRecord } from './services/countyRecords'
+import { getResearchProfile, researchNumber, researchText } from './services/researchProfile'
+import type { ResearchProfile } from './services/researchProfile'
 import {
   CostsSection,
   HomeValueSection,
@@ -17,6 +19,11 @@ import {
   RisksSection,
   RuralPotentialSection,
 } from './components/IntelligenceReport'
+import {
+  ResearchBadge,
+  ResearchCostsSection,
+  ResearchHomeValueSection,
+} from './components/ResearchEvidence'
 
 const reportNav = ['Overview', 'Home & Value', 'Land & Maps', 'Rural Potential', 'Risks', 'Costs']
 
@@ -81,6 +88,8 @@ function App() {
   const [parcelProvider, setParcelProvider] = useState<string | null>(null)
   const [countyRecord, setCountyRecord] = useState<CountyPropertyRecord | null>(null)
   const [countyRecordLoading, setCountyRecordLoading] = useState(false)
+  const [researchProfile, setResearchProfile] = useState<ResearchProfile | null>(null)
+  const [researchLoading, setResearchLoading] = useState(false)
   const [intelligence, setIntelligence] = useState<PropertyIntelligence | null>(null)
   const [intelligenceLoading, setIntelligenceLoading] = useState(false)
   const [activeLayers, setActiveLayers] = useState<string[]>([])
@@ -209,12 +218,14 @@ function App() {
     setIsSearching(true)
     setIntelligenceLoading(true)
     setCountyRecordLoading(true)
+    setResearchLoading(true)
     setIntelligence(null)
     setCountyRecord(null)
+    setResearchProfile(null)
     setActiveLayers([])
     setActiveSection('Overview')
     clearParcel()
-    setSearchStatus('Locating property and assembling official records + statewide intelligence…')
+    setSearchStatus('Locating property and comparing official records, researched facts and statewide land data…')
 
     try {
       const property = await resolveOhioAddress(query)
@@ -222,39 +233,45 @@ function App() {
         setLocatedProperty(null)
         setIntelligenceLoading(false)
         setCountyRecordLoading(false)
+        setResearchLoading(false)
         setSearchStatus('No confident Ohio address match found. Try the full street address, city and ZIP.')
         return
       }
 
       setLocatedProperty(property)
-      setSearchStatus(`Address verified${property.county ? ` in ${property.county} County` : ''}. Pulling county facts, soils, flood, wetlands, terrain and parcel records…`)
+      setSearchStatus(`Address verified${property.county ? ` in ${property.county} County` : ''}. Comparing county records, researched facts, parcel geometry and statewide land intelligence…`)
 
-      const [nextIntelligence, parcelData, nextCountyRecord] = await Promise.all([
+      const [nextIntelligence, parcelData, nextCountyRecord, nextResearchProfile] = await Promise.all([
         getPropertyIntelligence(property.longitude, property.latitude),
         property.county
           ? resolveCountyParcel(property.county, property.longitude, property.latitude)
           : Promise.resolve(null),
         getCountyPropertyRecord(property.county, property.address).catch(() => null),
+        getResearchProfile(property.address).catch(() => null),
       ])
 
       setIntelligence(nextIntelligence)
       setIntelligenceLoading(false)
       setCountyRecord(nextCountyRecord)
       setCountyRecordLoading(false)
+      setResearchProfile(nextResearchProfile)
+      setResearchLoading(false)
 
       if (parcelData?.supported && parcelData.parcel && !parcelData.error) {
         setParcel(parcelData.parcel)
         setParcelProvider(parcelData.provider ?? `${property.county} County GIS`)
       }
 
-      if (nextCountyRecord && parcelData?.parcel) {
+      if (nextResearchProfile && parcelData?.parcel) {
+        setSearchStatus(`Research-corroborated property facts, verified parcel geometry and statewide land intelligence loaded. Conflicting source fields stay visible.`)
+      } else if (nextResearchProfile) {
+        setSearchStatus(`Research-corroborated property facts + statewide land intelligence loaded. Parcel geometry remains a county GIS item.`)
+      } else if (nextCountyRecord && parcelData?.parcel) {
         setSearchStatus(`Official ${nextCountyRecord.source} property facts, verified parcel geometry and statewide land intelligence loaded.`)
-      } else if (nextCountyRecord) {
-        setSearchStatus(`Official ${nextCountyRecord.source} property facts + statewide land intelligence loaded. Parcel boundary is the remaining county GIS connection.`)
       } else if (parcelData?.parcel) {
-        setSearchStatus(`Verified parcel + statewide land intelligence loaded. Detailed county property facts are the remaining local adapter.`)
+        setSearchStatus(`Verified parcel + statewide land intelligence loaded. Detailed home/value facts still require a researched or county record.`)
       } else if (property.county) {
-        setSearchStatus(`Statewide land intelligence loaded for ${property.county} County. Detailed county parcel/property integration is still being connected.`)
+        setSearchStatus(`Statewide land intelligence loaded for ${property.county} County. Detailed local property integration is still being connected.`)
       } else {
         setSearchStatus('Statewide land intelligence loaded. County property record still requires resolution.')
       }
@@ -262,8 +279,10 @@ function App() {
       setLocatedProperty(null)
       setIntelligence(null)
       setCountyRecord(null)
+      setResearchProfile(null)
       setIntelligenceLoading(false)
       setCountyRecordLoading(false)
+      setResearchLoading(false)
       clearParcel()
       setSearchStatus(`ATLAS search error: ${error instanceof Error ? error.message : 'Unable to resolve property'}`)
     } finally {
@@ -272,19 +291,35 @@ function App() {
   }
 
   const properties = parcel?.properties ?? {}
-  const parcelId = countyRecord?.parcelNumber ?? firstValue(properties, ['ParcelNumber', 'PRCLID', 'PIN', 'PARCEL_ID', 'PARCELID', 'PARCEL', 'Parcel'])
-  const parcelAcres = numericValue(properties, ['ACRES', 'Acres', 'ACREAGE', 'Acreage', 'CALCACRES'])
-  const acres = countyRecord?.acres ?? parcelAcres
-  const appraised = countyRecord?.appraisedTotal ?? firstValue(properties, ['APRTOT', 'APPRAISED', 'APPRAISED_VALUE', 'MARKET_VALUE', 'TOTAL_VALUE'])
-  const livingArea = countyRecord?.dwelling?.livingArea ?? numericValue(properties, ['SQ_FT', 'LIVING_AREA', 'LIVAREA', 'SQUARE_FEET', 'SF'])
-  const yearBuilt = countyRecord?.dwelling?.yearBuilt ?? firstValue(properties, ['YRBLT', 'YEAR_BUILT', 'YEARBUILT'])
-  const zoning = firstValue(properties, ['ZoneType', 'ZONING', 'Zoning', 'ZONE'])
+  const researchedParcelId = researchText(researchProfile, ['parcel', 'parcelNumber'])
+  const parcelId = researchedParcelId ?? countyRecord?.parcelNumber ?? firstValue(properties, ['PARCELNUMB', 'ParcelNumber', 'PRCLID', 'PIN', 'PID', 'SIDWELL_C', 'PARNUM', 'PARCEL_ID', 'PARCELID', 'PARCEL', 'Parcel'])
+  const parcelAcres = numericValue(properties, ['ACREAGE', 'ACRES', 'Acres', 'acres', 'GISACRE', 'Acreage', 'CALCACRES'])
+  const acres = researchNumber(researchProfile, ['lot', 'acres']) ?? countyRecord?.acres ?? parcelAcres
+  const appraised = researchNumber(researchProfile, ['valuation', 'countyAppraisedValue']) ?? countyRecord?.appraisedTotal ?? firstValue(properties, ['APRTOT', 'APPRAISED', 'APPRAISED_VALUE', 'MARKET_VALUE', 'TOTAL_VALUE'])
+  const assessed = researchNumber(researchProfile, ['valuation', 'taxableAssessedValue']) ?? countyRecord?.assessedTotal
+  const livingArea = researchNumber(researchProfile, ['homeFacts', 'livingAreaSqFt']) ?? countyRecord?.dwelling?.livingArea ?? numericValue(properties, ['SQ_FT', 'LIVING_AREA', 'LIVAREA', 'SQUARE_FEET', 'SF'])
+  const yearBuilt = researchNumber(researchProfile, ['homeFacts', 'yearBuilt']) ?? countyRecord?.dwelling?.yearBuilt ?? numericValue(properties, ['YRBLT', 'YEAR_BUILT', 'YEARBUILT'])
+  const bedrooms = researchNumber(researchProfile, ['homeFacts', 'bedrooms']) ?? countyRecord?.dwelling?.bedrooms
+  const fullBaths = researchNumber(researchProfile, ['homeFacts', 'fullBathrooms']) ?? countyRecord?.dwelling?.fullBaths
+  const stories = researchNumber(researchProfile, ['homeFacts', 'stories']) ?? countyRecord?.dwelling?.stories
+  const zoning = researchText(researchProfile, ['zoning', 'value']) ?? String(firstValue(properties, ['ZoneType', 'ZONING', 'Zoning', 'ZONE']) ?? '') || null
+  const salePrice = researchNumber(researchProfile, ['sale', 'price']) ?? countyRecord?.salePrice
+  const saleDate = researchText(researchProfile, ['sale', 'mlsCloseDate']) ?? countyRecord?.saleDate
+  const annualTaxDisplay = researchText(researchProfile, ['tax', 'annualTaxDisplay'])
+  const classificationMls = researchText(researchProfile, ['classification', 'mlsDisplay'])
+  const classificationPublic = researchText(researchProfile, ['classification', 'publicRecordDisplay'])
+  const researchSourceCount = researchProfile?.sources.length ?? 0
 
-  const quickFacts = countyRecord ? [
+  const quickFacts = researchProfile ? [
     ['Home size', livingArea ? `${livingArea.toLocaleString()} sf` : '—'],
     ['Year built', yearBuilt ? String(yearBuilt) : '—'],
     ['Appraised', money(appraised)],
-    ['Current tax', money(countyRecord.currentTax)],
+    ['2025 taxes', annualTaxDisplay ?? '—'],
+  ] : countyRecord ? [
+    ['Home size', livingArea ? `${livingArea.toLocaleString()} sf` : '—'],
+    ['Year built', yearBuilt ? String(yearBuilt) : '—'],
+    ['Appraised', money(appraised)],
+    ['County tax field', money(countyRecord.currentTax)],
   ] : [
     ['Acres', acres ? acres.toFixed(2) : 'Parcel pending'],
     [livingArea ? 'Home size' : 'Elevation', livingArea ? `${livingArea.toLocaleString()} sf` : intelligence?.terrain.value ?? (intelligenceLoading ? 'Checking…' : '—')],
@@ -319,10 +354,19 @@ function App() {
       ) : (
         <>
           <section className="property-shell">
-            <div className="property-topbar"><form className="compact-search" onSubmit={handleSubmit}><input value={address} onChange={(event) => setAddress(event.target.value)} aria-label="Search another property" /><button type="submit" disabled={isSearching}>{isSearching ? 'Analyzing…' : 'Search'}</button></form><span className="report-status">{countyRecord ? 'County record verified' : parcel ? 'Parcel verified' : 'Address verified'}</span></div>
+            <div className="property-topbar"><form className="compact-search" onSubmit={handleSubmit}><input value={address} onChange={(event) => setAddress(event.target.value)} aria-label="Search another property" /><button type="submit" disabled={isSearching}>{isSearching ? 'Analyzing…' : 'Search'}</button></form><span className="report-status">{researchProfile ? 'Research corroborated' : countyRecord ? 'County record verified' : parcel ? 'Parcel verified' : 'Address verified'}</span></div>
 
             <header className="property-identity">
-              <div><p className="eyebrow">ATLAS PROPERTY REPORT</p><h1>{locatedProperty?.address}</h1><div className="identity-meta"><span className="evidence-badge verified">Verified address</span><span>{locatedProperty?.county ? `${locatedProperty.county} County` : 'Ohio'}</span><span>{countyRecord?.source ?? locatedProperty?.source}</span></div></div>
+              <div>
+                <p className="eyebrow">ATLAS PROPERTY REPORT</p>
+                <h1>{locatedProperty?.address}</h1>
+                <div className="identity-meta">
+                  <span className="evidence-badge verified">Verified address</span>
+                  <span>{locatedProperty?.county ? `${locatedProperty.county} County` : 'Ohio'}</span>
+                  <span>{parcelProvider ?? countyRecord?.source ?? locatedProperty?.source}</span>
+                  <ResearchBadge profile={researchProfile} />
+                </div>
+              </div>
               <div className="quick-facts">{quickFacts.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
             </header>
 
@@ -331,25 +375,36 @@ function App() {
                 <div className="live-map report-map" ref={mapContainer} />
                 <div className="map-overlay-label">AERIAL · {parcel ? 'PARCEL VERIFIED' : 'ADDRESS LOCATED'}</div>
                 <div className="map-layer-quick" aria-label="Quick map layers">
-                  {['Terrain', 'Soils', 'Flood', 'Wetlands'].map((layer) => <button key={layer} className={activeLayers.includes(layer) ? 'active' : ''} onClick={() => toggleLayer(layer)}>{layer}</button>)}
+                  {['Terrain', 'Topography', 'Soils', 'Water', 'Flood', 'Wetlands'].map((layer) => <button key={layer} className={activeLayers.includes(layer) ? 'active' : ''} onClick={() => toggleLayer(layer)}>{layer}</button>)}
                 </div>
                 <div className="map-bottom-bar"><div><span className="mini-label">MAP STATUS</span><strong>{parcel ? 'Verified parcel boundary' : 'Statewide layers ready · parcel boundary awaiting county GIS source'}</strong></div><span className={parcel ? 'location-pill verified-pill' : 'location-pill'}>{parcel ? 'Verified' : 'Located'}</span></div>
               </section>
+
               <aside className="property-summary-card">
-                <div className="summary-heading"><span>Property snapshot</span><small>{countyRecord?.source ?? parcelProvider ?? 'Statewide + federal public records'}</small></div>
+                <div className="summary-heading"><span>Property snapshot</span><small>{researchProfile ? `${researchSourceCount} researched sources + official GIS` : countyRecord?.source ?? parcelProvider ?? 'Statewide + federal public records'}</small></div>
                 <div className="summary-list">
                   <div><span>Parcel ID</span><strong>{String(parcelId ?? 'Requires county parcel record')}</strong></div>
-                  {countyRecord && <div><span>Last sale</span><strong>{money(countyRecord.salePrice)} · {dateLabel(countyRecord.saleDate)}</strong></div>}
-                  {countyRecord && <div><span>Home</span><strong>{countyRecord.dwelling ? `${countyRecord.dwelling.bedrooms ?? '—'} bd · ${countyRecord.dwelling.fullBaths ?? '—'} ba · ${countyRecord.dwelling.stories ?? '—'} story` : 'Requires dwelling record'}</strong></div>}
-                  {countyRecord && <div><span>Land use</span><strong>{countyRecord.landUse ?? 'Requires verification'}</strong></div>}
+                  <div><span>Lot</span><strong>{acres ? `${acres.toFixed(2)} acres` : 'Requires verification'}</strong></div>
+                  <div><span>Home</span><strong>{livingArea ? `${bedrooms ?? '—'} bd · ${fullBaths ?? '—'} ba · ${livingArea.toLocaleString()} sf · ${stories ?? '—'} story` : 'Requires dwelling record'}</strong></div>
+                  <div><span>Year built</span><strong>{yearBuilt ? String(yearBuilt) : 'Requires verification'}</strong></div>
+                  <div><span>Zoning</span><strong>{zoning ?? 'Requires local verification'}</strong></div>
+                  {classificationMls && classificationPublic && (
+                    <div className="source-conflict-inline"><span>Classification conflict</span><strong>{classificationMls}</strong><em>County/public record also carries: {classificationPublic}. ATLAS does not treat those labels as interchangeable.</em></div>
+                  )}
+                  <div><span>Last sale</span><strong>{salePrice ? `${money(salePrice)} · ${dateLabel(saleDate)}` : 'Requires sale record'}</strong></div>
                   {countyRecord && <div><span>School district</span><strong>{countyRecord.schoolDistrict ?? '—'}</strong></div>}
-                  {countyRecord && <div><span>CAUV</span><strong>{countyRecord.hasCauv ? 'Enrolled' : 'Not enrolled'}</strong></div>}
-                  {!countyRecord && <div><span>Zoning</span><strong>{String(zoning ?? 'Requires local verification')}</strong></div>}
+                  {countyRecord && <div><span>CAUV</span><strong>{countyRecord.hasCauv ? 'County record: enrolled' : 'County record: not enrolled'}</strong></div>}
+                  <div><span>County appraisal</span><strong>{money(appraised)}</strong></div>
+                  {assessed ? <div><span>Taxable assessment</span><strong>{money(assessed)}</strong></div> : null}
                   <div><span>Soil</span><strong>{intelligence?.soil.value ?? (intelligenceLoading ? 'Checking…' : 'Requires verification')}</strong></div>
                   <div><span>County</span><strong>{locatedProperty?.county ? `${locatedProperty.county} County` : 'Resolving'}</strong></div>
                 </div>
-                {countyRecord?.acreageRecordRaw === 0 && <div className="status-note"><span className="status-dot" />Brown County's current property record reports 0.0000 acres for this record. ATLAS will not present that as true parcel acreage until the GIS/land record is reconciled.</div>}
-                <div className="status-note"><span className="status-dot" />{countyRecordLoading ? 'Loading county property record…' : searchStatus}</div>
+
+                {countyRecord?.acreageRecordRaw === 0 && researchProfile && (
+                  <div className="status-note"><span className="status-dot" />Source conflict: the county extract reports 0.0000 acres, while researched listing/MLS facts and the parcel record support {acres?.toFixed(2) ?? '1.00'} acres. ATLAS keeps the conflict visible instead of using zero.</div>
+                )}
+                {countyRecord?.acreageRecordRaw === 0 && !researchProfile && <div className="status-note"><span className="status-dot" />The county property extract reports 0.0000 acres. ATLAS will not use zero for rural analysis until another source reconciles it.</div>}
+                <div className="status-note"><span className="status-dot" />{researchLoading ? 'Checking reviewed research…' : countyRecordLoading ? 'Loading county property record…' : searchStatus}</div>
               </aside>
             </div>
           </section>
@@ -359,21 +414,30 @@ function App() {
           <section className="report-content">
             {activeSection === 'Overview' && (
               <>
-                <div className="section-heading"><div><p className="eyebrow">OVERVIEW</p><h2>The property at a glance.</h2></div><p>ATLAS separates official records, derived spatial findings and questions that still need local verification.</p></div>
+                <div className="section-heading"><div><p className="eyebrow">OVERVIEW</p><h2>The property at a glance.</h2></div><p>ATLAS separates official records, corroborated research, derived spatial findings and questions that still need local verification.</p></div>
                 <IntelligenceStrip intelligence={intelligence} loading={intelligenceLoading} />
                 <div className="overview-grid overview-actions">
-                  <article className="intel-card feature-card"><span className="card-kicker">THE HOME</span><h3>Home & value</h3><p>{countyRecord?.dwelling ? `${countyRecord.dwelling.livingArea?.toLocaleString() ?? '—'} sq ft · ${countyRecord.dwelling.bedrooms ?? '—'} bed · ${countyRecord.dwelling.fullBaths ?? '—'} bath · built ${countyRecord.dwelling.yearBuilt ?? '—'}. County appraisal ${money(countyRecord.appraisedTotal)}.` : 'County building/value records are the remaining local adapter.'}</p><button onClick={() => setActiveSection('Home & Value')}>Open Home & Value →</button></article>
-                  <article className="intel-card feature-card"><span className="card-kicker">THE LAND</span><h3>Land intelligence</h3><p>{intelligence ? `${intelligence.soil.value}. ${intelligence.terrain.value}.` : 'Soils, terrain, flood and wetlands are being assembled.'}</p><button onClick={() => setActiveSection('Land & Maps')}>Open Land & Maps →</button></article>
+                  <article className="intel-card feature-card">
+                    <span className="card-kicker">THE HOME</span><h3>Home & value</h3>
+                    <p>{livingArea ? `${livingArea.toLocaleString()} sq ft · ${bedrooms ?? '—'} bed · ${fullBaths ?? '—'} bath · built ${yearBuilt ?? '—'}. County appraisal ${money(appraised)}${assessed ? `; taxable assessment ${money(assessed)}` : ''}.` : 'County building/value records or researched facts are still needed.'}</p>
+                    <button onClick={() => setActiveSection('Home & Value')}>Open Home & Value →</button>
+                  </article>
+                  <article className="intel-card feature-card"><span className="card-kicker">THE LAND</span><h3>Land intelligence</h3><p>{intelligence ? `${acres ? `${acres.toFixed(2)} acres. ` : ''}${intelligence.soil.value}. ${intelligence.terrain.value}.` : 'Soils, terrain, flood and wetlands are being assembled.'}</p><button onClick={() => setActiveSection('Land & Maps')}>Open Land & Maps →</button></article>
                   <article className="intel-card feature-card"><span className="card-kicker">DUE DILIGENCE</span><h3>What needs attention?</h3><p>{intelligence ? `${intelligence.flood.value}. ${intelligence.wetlands.value}.` : 'Flood, wetlands, zoning, septic and access checks stay together.'}</p><button onClick={() => setActiveSection('Risks')}>Review Risks →</button></article>
                 </div>
-                <div className="rural-smart-cta"><div><p className="eyebrow">RURAL POTENTIAL</p><h2>Turn the evidence into “what could I do here?”</h2><p>ATLAS now uses soil, terrain and mapped water constraints as inputs, while keeping zoning, acreage and septic gaps visible.</p></div><button onClick={() => setActiveSection('Rural Potential')}>Analyze rural potential →</button></div>
+                <div className="rural-smart-cta"><div><p className="eyebrow">RURAL POTENTIAL</p><h2>Turn the evidence into “what could I do here?”</h2><p>ATLAS uses parcel acreage, soil, terrain and mapped water constraints as inputs while keeping zoning, septic and source conflicts visible.</p></div><button onClick={() => setActiveSection('Rural Potential')}>Analyze rural potential →</button></div>
               </>
             )}
-            {activeSection === 'Home & Value' && <HomeValueSection parcelVerified={Boolean(parcel)} county={locatedProperty?.county ?? null} record={countyRecord} />}
+
+            {activeSection === 'Home & Value' && (researchProfile
+              ? <ResearchHomeValueSection profile={researchProfile} />
+              : <HomeValueSection parcelVerified={Boolean(parcel)} county={locatedProperty?.county ?? null} record={countyRecord} />)}
             {activeSection === 'Land & Maps' && <LandMapsSection intelligence={intelligence} loading={intelligenceLoading} activeLayers={activeLayers} onToggleLayer={toggleLayer} />}
             {activeSection === 'Rural Potential' && <RuralPotentialSection intelligence={intelligence} acres={acres} zoningKnown={Boolean(zoning)} />}
             {activeSection === 'Risks' && <RisksSection intelligence={intelligence} county={locatedProperty?.county ?? null} parcelVerified={Boolean(parcel)} />}
-            {activeSection === 'Costs' && <CostsSection county={locatedProperty?.county ?? null} record={countyRecord} />}
+            {activeSection === 'Costs' && (researchProfile
+              ? <ResearchCostsSection profile={researchProfile} countyRecord={countyRecord} />
+              : <CostsSection county={locatedProperty?.county ?? null} record={countyRecord} />)}
           </section>
         </>
       )}
