@@ -1,0 +1,9 @@
+{
+	"name": "holton-atlas",
+	"compatibility_date": "2026-08-31",
+	"main": "./dist/_worker.js",
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS"
+	}
+}
