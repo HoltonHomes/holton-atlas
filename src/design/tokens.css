@@ -1,0 +1,30 @@
+:root {
+  --atlas-navy: #1c2b45;
+  --atlas-navy-soft: #253855;
+  --atlas-rose: #d95f82;
+  --atlas-rose-soft: #f3a1ba;
+  --atlas-cream: #fff8ef;
+  --atlas-charcoal: #2b2b2b;
+  --atlas-white: #ffffff;
+  --atlas-muted: #7c8490;
+  --atlas-border: rgba(28, 43, 69, 0.08);
+  --atlas-shadow-sm: 0 8px 24px rgba(28, 43, 69, 0.08);
+  --atlas-shadow-md: 0 20px 60px rgba(28, 43, 69, 0.10);
+  --atlas-shadow-lg: 0 32px 90px rgba(28, 43, 69, 0.14);
+  --atlas-radius-sm: 10px;
+  --atlas-radius-md: 16px;
+  --atlas-radius-lg: 24px;
+  --atlas-radius-hero: 32px;
+  --atlas-space-1: 4px;
+  --atlas-space-2: 8px;
+  --atlas-space-3: 12px;
+  --atlas-space-4: 16px;
+  --atlas-space-5: 24px;
+  --atlas-space-6: 32px;
+  --atlas-space-7: 48px;
+  --atlas-space-8: 72px;
+  --atlas-motion-fast: 160ms;
+  --atlas-motion-normal: 280ms;
+  --atlas-motion-reveal: 520ms;
+  --atlas-ease: cubic-bezier(.2,.8,.2,1);
+}
