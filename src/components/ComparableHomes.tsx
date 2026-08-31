@@ -1,6 +1,77 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import type { ResearchProfile } from '../services/researchProfile'
+
+type StreetViewState =
+  | { status: 'no-key' | 'no-address' | 'checking' | 'no-coverage' }
+  | { status: 'available'; imageUrl: string }
+
+function useStreetViewImage(address: string | undefined): StreetViewState {
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  const [state, setState] = useState<StreetViewState>(() => {
+    if (!apiKey) return { status: 'no-key' }
+    if (!address) return { status: 'no-address' }
+    return { status: 'checking' }
+  })
+
+  useEffect(() => {
+    if (!apiKey) {
+      setState({ status: 'no-key' })
+      return
+    }
+    if (!address) {
+      setState({ status: 'no-address' })
+      return
+    }
+    let cancelled = false
+    setState({ status: 'checking' })
+    const location = encodeURIComponent(address)
+    // Street View returns a generic gray "no imagery" placeholder even when
+    // nothing real exists at the location, so check the free metadata
+    // endpoint first rather than trusting the image request to fail.
+    fetch(`https://maps.googleapis.com/maps/api/streetview/metadata?size=400x300&location=${location}&key=${apiKey}`)
+      .then((response) => response.json())
+      .then((data: { status?: string }) => {
+        if (cancelled) return
+        if (data?.status === 'OK') {
+          setState({ status: 'available', imageUrl: `https://maps.googleapis.com/maps/api/streetview?size=400x300&location=${location}&key=${apiKey}` })
+        } else {
+          setState({ status: 'no-coverage' })
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: 'no-coverage' })
+      })
+    return () => { cancelled = true }
+  }, [address, apiKey])
+
+  return state
+}
+
+function CompPhoto({ address, tag, fallbackTitle, className = '' }: { address: string | undefined; tag: string; fallbackTitle: string; className?: string }) {
+  const streetView = useStreetViewImage(address)
+
+  if (streetView.status === 'available') {
+    return (
+      <div className={`comp-photo ${className}`.trim()}>
+        <img src={streetView.imageUrl} alt={`Street view of ${address}`} loading="lazy" />
+        <span className="comp-photo-tag">{tag}</span>
+      </div>
+    )
+  }
+
+  const note = streetView.status === 'no-coverage'
+    ? 'No street-level imagery is available for this address.'
+    : 'Authorized property imagery will replace this panel when a licensed media source is connected.'
+
+  return (
+    <div className={`comp-photo-placeholder ${className}`.trim()} aria-label="Comparable property imagery unavailable">
+      <span>{tag}</span>
+      <strong>{fallbackTitle}</strong>
+      <small>{note}</small>
+    </div>
+  )
+}
 
 function money(value: unknown) {
   const number = Number(value)
@@ -90,7 +161,7 @@ function similarityScore(comp: Comparable, subject: Subject) {
   return score
 }
 
-export default function ComparableHomes({ profile, livingArea, acres, yearBuilt }: { profile: ResearchProfile | null; livingArea: number | null; acres: number | null; yearBuilt: number | null }) {
+export default function ComparableHomes({ profile, livingArea, acres, yearBuilt, subjectAddress }: { profile: ResearchProfile | null; livingArea: number | null; acres: number | null; yearBuilt: number | null; subjectAddress?: string }) {
   const raw = profile?.facts?.valuationEvidence?.closedComps
   const subject: Subject = { livingArea, acres, yearBuilt }
   const comps: Comparable[] = useMemo(() => {
@@ -122,11 +193,7 @@ export default function ComparableHomes({ profile, livingArea, acres, yearBuilt 
               const closed = comp.closeDate ?? comp.saleDate
               return (
                 <motion.button type="button" key={`${comp.address ?? 'comp'}-${index}`} className={selectedIndex === index ? 'comparable-home-card selected' : 'comparable-home-card'} onClick={() => setSelectedIndex(index)} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }}>
-                  <div className="comp-photo-placeholder" aria-label="Comparable property imagery unavailable">
-                    <span>{index === 0 ? 'CLOSEST REVIEWED MATCH' : 'REVIEWED CLOSED SALE'}</span>
-                    <strong>{comp.address ?? 'Nearby closed sale'}</strong>
-                    <small>Authorized property imagery will replace this panel when a licensed media source is connected.</small>
-                  </div>
+                  <CompPhoto address={comp.address} tag={index === 0 ? 'CLOSEST REVIEWED MATCH' : 'REVIEWED CLOSED SALE'} fallbackTitle={comp.address ?? 'Nearby closed sale'} />
                   <div className="comp-card-body">
                     <div className="comp-sale-line"><strong>{money(sale)}</strong><span>{closed ? `Closed ${dateLabel(closed)}` : 'Closed sale'}</span></div>
                     <div className="comp-facts">
@@ -146,8 +213,8 @@ export default function ComparableHomes({ profile, livingArea, acres, yearBuilt 
             <motion.section key={`${selected.address}-${selectedIndex}`} className="subject-comp-compare" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
               <div className="compare-heading"><div><span>HOW THIS HOME COMPARES</span><strong>Subject property ↔ {selected.address ?? 'selected closed sale'}</strong></div><p>This is comparison evidence, not an automatic dollar adjustment. Differences become reasons to widen, tighten or investigate the range.</p></div>
               <div className="compare-property-grid">
-                <article><span>SUBJECT</span><strong>This property</strong><div>{livingArea && <b>{livingArea.toLocaleString()} sq ft</b>}{acres && <b>{acres.toFixed(2)} acres</b>}{yearBuilt && <b>Built {yearBuilt}</b>}</div></article>
-                <article><span>CLOSED SALE</span><strong>{selected.address ?? 'Reviewed sale'}</strong><div>{compArea(selected) != null && <b>{compArea(selected)?.toLocaleString()} sq ft</b>}{compAcres(selected) != null && <b>{compAcres(selected)?.toFixed(2)} acres</b>}{compYear(selected) != null && <b>Built {compYear(selected)}</b>}</div></article>
+                <article><CompPhoto address={subjectAddress} tag="SUBJECT" fallbackTitle="This property" className="compare-photo" /><span>SUBJECT</span><strong>This property</strong><div>{livingArea && <b>{livingArea.toLocaleString()} sq ft</b>}{acres && <b>{acres.toFixed(2)} acres</b>}{yearBuilt && <b>Built {yearBuilt}</b>}</div></article>
+                <article><CompPhoto address={selected.address} tag="CLOSED SALE" fallbackTitle={selected.address ?? 'Reviewed sale'} className="compare-photo" /><span>CLOSED SALE</span><strong>{selected.address ?? 'Reviewed sale'}</strong><div>{compArea(selected) != null && <b>{compArea(selected)?.toLocaleString()} sq ft</b>}{compAcres(selected) != null && <b>{compAcres(selected)?.toFixed(2)} acres</b>}{compYear(selected) != null && <b>Built {compYear(selected)}</b>}</div></article>
               </div>
               <div className="compare-difference-chips">
                 {differenceLabel(livingArea, compArea(selected), 'sq ft') && <span>{differenceLabel(livingArea, compArea(selected), 'sq ft')}</span>}

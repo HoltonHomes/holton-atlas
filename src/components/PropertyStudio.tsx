@@ -46,8 +46,8 @@ export default function PropertyStudio({
           <h2>See the property. Test the idea.</h2>
         </div>
         <div className="studio-heading-note">
-          <strong>{analysis ? 'Parcel-wide model ready' : parcelVerified ? 'Parcel located · analysis loading' : 'Address view · parcel needed'}</strong>
-          <small>{analysis ? 'Mapped land evidence is drawn from the recorded parcel.' : 'Explore the location now. Parcel placement unlocks when the boundary is available.'}</small>
+          <strong>{analysis ? 'Full lot checked' : parcelVerified ? 'Boundary found · checking now' : 'Location found · boundary needed'}</strong>
+          <small>{analysis ? 'Flood, wetlands, soil and slope are mapped across the whole lot.' : 'Explore the location now. Placing ideas on the map unlocks once we confirm the property boundary.'}</small>
         </div>
       </header>
       <div className="property-studio-stage">
@@ -62,7 +62,7 @@ export default function PropertyStudio({
         <aside className="studio-intelligence-rail">
           <div className="studio-rail-topline">
             <span>LAND READ</span>
-            <b>{analysis ? 'PARCEL' : 'SCREEN'}</b>
+            <b>{analysis ? 'FULL LOT' : 'QUICK SCAN'}</b>
           </div>
 
           <div className="studio-acreage">
@@ -77,7 +77,7 @@ export default function PropertyStudio({
             >
               <div><strong>{gentle == null ? '—' : Math.round(gentle)}</strong><span>{gentle == null ? 'pending' : '% gentle'}</span></div>
             </div>
-            <div><span>TERRAIN</span><strong>{slope ? `${percent(slope.over10Percent)} steep` : intelligence?.terrain.value ?? 'Not loaded'}</strong><small>{slope ? `${percent(slope.fiveTo10Percent)} moderate slope` : 'Parcel-wide slope will replace the point reading.'}</small></div>
+            <div><span>TERRAIN</span><strong>{slope ? `${percent(slope.over10Percent)} steep` : intelligence?.terrain.value ?? 'Not loaded'}</strong><small>{slope ? `${percent(slope.fiveTo10Percent)} moderate slope` : 'A full-lot slope reading will replace this estimate once available.'}</small></div>
           </div>
 
           <div className="studio-constraint-list">
@@ -103,8 +103,8 @@ export default function PropertyStudio({
           </button>
 
           <footer>
-            <span>{parcelVerified ? 'Recorded parcel located' : 'Address located'}</span>
-            <small>{checkedAt ? `Evidence checked ${new Date(checkedAt).toLocaleDateString()}` : 'Evidence still loading'}</small>
+            <span>{parcelVerified ? 'Property boundary found' : 'Address located'}</span>
+            <small>{checkedAt ? `Checked ${new Date(checkedAt).toLocaleDateString()}` : 'Still checking'}</small>
           </footer>
         </aside>
       </div>

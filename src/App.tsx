@@ -279,9 +279,9 @@ export default function App() {
               <p>Before ATLAS decides what to show first, tell it why you are looking at this property.</p>
 
               <div className="reveal-intent-grid">
-                <button type="button" onClick={() => chooseIntent('buyer')}><span>I'M THINKING OF BUYING</span><strong>Help me understand what I am buying.</strong><small>Price · comps · land · possibilities · what to verify</small></button>
-                <button type="button" onClick={() => chooseIntent('seller')}><span>I OWN THIS HOME</span><strong>Help me understand what it may be worth.</strong><small>Value · comps · buyer questions · selling context</small></button>
-                <button type="button" onClick={() => chooseIntent('researcher')}><span>JUST EXPLORING</span><strong>Tell me everything useful about this place.</strong><small>Property · market · land · records</small></button>
+                <button type="button" onClick={() => chooseIntent('buyer')}><span>I'm looking to buy this</span><strong>See what you'd actually be buying: price, land, condition, what to verify.</strong></button>
+                <button type="button" onClick={() => chooseIntent('seller')}><span>I already own this home</span><strong>See what it may be worth and what buyers will ask.</strong></button>
+                <button type="button" onClick={() => chooseIntent('researcher')}><span>Just researching / not sure yet</span><strong>Get the full picture — price, land, records — no commitment.</strong></button>
               </div>
             </div>
           </div>
@@ -304,7 +304,7 @@ export default function App() {
               <div><p className="eyebrow">{reportTitle(clientIntent).toUpperCase()}</p><h1>{locatedProperty.address}</h1><p>{searchStatus}</p></div>
               <div className="client-proof-stack">
                 <span>{locatedProperty.county ? `${locatedProperty.county} County` : 'Ohio'}</span>
-                <span>{intelligence?.parcelAnalysis ? 'Parcel-wide screen complete' : parcel ? 'Parcel matched' : 'Address matched'}</span>
+                <span>{intelligence?.parcelAnalysis ? 'Full lot checked for flood, wetlands, soil and slope' : parcel ? 'Property boundary confirmed' : 'Address matched'}</span>
                 {valuation && <strong>{money(valuation.estimate)} <small>{clientIntent === 'seller' ? 'estimated center' : 'price context'}</small></strong>}
               </div>
             </div>
@@ -374,7 +374,7 @@ export default function App() {
                   <LandAtGlance intelligence={intelligence} />
                   <div className="explore-two-up">
                     <article><span>ZONING REFERENCE</span><strong>{zoning ?? 'Needs local confirmation'}</strong><p>{zoning ? `${zoning} zoning reference found. This does not settle a specific proposed use.` : 'Local zoning still needs verification with the applicable jurisdiction.'}</p></article>
-                    <article><span>{intelligence?.parcelAnalysis ? 'PARCEL-WIDE SCREEN' : 'SCREENING LEVEL'}</span><strong>{intelligence?.parcelAnalysis ? 'ATLAS checked the parcel—not only the address point.' : 'Some environmental evidence is still point-level.'}</strong><p>{intelligence?.parcelAnalysis ? `Flood, wetlands and soil findings reflect the recorded parcel${intelligence.parcelAnalysis.slope ? '; terrain is sampled across it' : ''}${intelligence.parcelAnalysis.water ? '; mapped surface water is included' : ''}.` : 'ATLAS keeps the technical source underneath while showing exactly where the current evidence stops.'}</p></article>
+                    <article><span>{intelligence?.parcelAnalysis ? 'FULL LOT CHECKED' : 'LIMITED CHECK SO FAR'}</span><strong>{intelligence?.parcelAnalysis ? 'ATLAS checked the whole lot—not just the address point.' : 'Some findings are still based on the address point only.'}</strong><p>{intelligence?.parcelAnalysis ? `Flood, wetlands and soil findings reflect the recorded parcel${intelligence.parcelAnalysis.slope ? '; terrain is sampled across it' : ''}${intelligence.parcelAnalysis.water ? '; mapped surface water is included' : ''}.` : 'ATLAS shows exactly what still needs checking across the full lot.'}</p></article>
                   </div>
                 </div>
               )}
@@ -390,7 +390,7 @@ export default function App() {
                 <div className="client-workspace research-workspace">
                   <div className="client-workspace-heading"><div><span>THE REALITY CHECK</span><h2>Taxes, estimated cost and what still needs verifying.</h2></div><p>Closed-market evidence carries the most weight in price. Flood, soil, septic and zoning stay separated into public record, mapped evidence and open questions.</p></div>
                   {researchProfile ? <ResearchHomeValueSection profile={researchProfile} intent={clientIntent} /> : <HomeValueSection parcelVerified={Boolean(parcel)} county={locatedProperty.county} record={countyRecord} />}
-                  <ComparableHomes profile={researchProfile} livingArea={livingArea} acres={acres} yearBuilt={yearBuilt} />
+                  <ComparableHomes profile={researchProfile} livingArea={livingArea} acres={acres} yearBuilt={yearBuilt} subjectAddress={locatedProperty.address} />
                   <details className="price-costs-drawer"><summary>Taxes & ownership-cost context</summary>{researchProfile ? <ResearchCostsSection profile={researchProfile} countyRecord={countyRecord} /> : <CostsSection county={locatedProperty.county} record={countyRecord} />}</details>
                   <RisksSection intelligence={intelligence} county={locatedProperty.county} parcelVerified={Boolean(parcel)} />
                   <PropertyResearch intelligence={intelligence} parcelVerified={Boolean(parcel)} acres={acres} zoning={zoning} county={locatedProperty.county} hasCauv={countyRecord ? countyRecord.hasCauv : null} />

@@ -53,12 +53,12 @@ export default function LandAtGlance({ intelligence }: { intelligence: PropertyI
     <section className={analysis ? 'land-at-glance parcel-wide' : 'land-at-glance point-level'}>
       <div className="land-glance-heading">
         <div>
-          <span>{analysis ? 'PARCEL-WIDE LAND SCREEN' : 'LAND SCREENING'}</span>
-          <h3>{analysis ? 'See the land before you plan it.' : 'What ATLAS can tell from the evidence available so far.'}</h3>
+          <span>{analysis ? 'FULL LOT CHECKED' : 'LIMITED CHECK SO FAR'}</span>
+          <h3>{analysis ? 'See the land before you plan it.' : 'What ATLAS can tell so far.'}</h3>
         </div>
         <p>{analysis
-          ? `ATLAS matched the recorded parcel and calculated mapped overlap against approximately ${analysis.parcelAcres.toFixed(2)} acres. These layers can overlap each other and do not equal “unusable acreage.”`
-          : 'Some environmental findings are still based on the geocoded address point. ATLAS keeps that limitation visible instead of pretending the whole parcel was analyzed.'}</p>
+          ? `ATLAS checked the whole lot — about ${analysis.parcelAcres.toFixed(2)} acres — against these layers. They can overlap each other and do not equal "unusable acreage."`
+          : 'Some findings below are still based on just the property’s map location, not the full lot. ATLAS keeps that limitation visible instead of pretending the whole lot was checked.'}</p>
       </div>
 
       <div className="land-glance-grid">
@@ -105,7 +105,7 @@ export default function LandAtGlance({ intelligence }: { intelligence: PropertyI
         <motion.article initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .2 }}>
           <div className="land-glance-top"><span>SURFACE WATER</span><i className={water?.waterbodyPercent ? 'verify' : 'screened'} /></div>
           <strong>{waterHeadline}</strong>
-          <p>{water ? `${acres(water.waterbodyAcres)} mapped as open water${water.streamCount != null ? ` · ${water.streamCount} mapped stream or flowline intersection${water.streamCount === 1 ? '' : 's'}` : ''}.` : 'USGS parcel-wide water features were not available during this screen.'}</p>
+          <p>{water ? `${acres(water.waterbodyAcres)} mapped as open water${water.streamCount != null ? ` · ${water.streamCount} mapped stream or flowline intersection${water.streamCount === 1 ? '' : 's'}` : ''}.` : 'USGS water data for the full lot was not available for this check.'}</p>
           <small>{water?.source ?? 'USGS National Hydrography Dataset'}</small>
         </motion.article>
       </div>

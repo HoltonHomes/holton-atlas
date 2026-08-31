@@ -4,7 +4,6 @@ import type { GeoJSONSource, StyleSpecification } from 'maplibre-gl'
 import { booleanPointInPolygon, point } from '@turf/turf'
 import type { LocatedProperty, ParcelFeature } from '../services/ohioProperty'
 import { INTELLIGENCE_OVERLAYS } from '../services/propertyIntelligence'
-import AtlasWorld from './world/AtlasWorld'
 
 export type BaseMapMode = 'Aerial' | 'Topographic'
 export type PlannerName = 'Barn' | 'Garden' | 'Poultry' | 'Pasture' | 'Goats' | 'Orchard' | 'Pond' | 'Driveway'
@@ -125,7 +124,6 @@ export default function PropertyMap({
   const [plannerTool, setPlannerTool] = useState<PlannerName>(planningTool ?? 'Barn')
   const [placements, setPlacements] = useState<PlannerPlacement[]>([])
   const [plannerMessage, setPlannerMessage] = useState('')
-  const [worldOpen, setWorldOpen] = useState(false)
   const baseMapRef = useRef<BaseMapMode>(baseMap)
   const is3DRef = useRef(is3D)
   const plannerOpenRef = useRef(plannerOpen || planningMode)
@@ -145,7 +143,6 @@ export default function PropertyMap({
   useEffect(() => {
     if (planningMode) {
       setPlannerOpen(true)
-      setWorldOpen(false)
       setBaseMap('Aerial')
       setIs3D(false)
     }
@@ -178,7 +175,7 @@ export default function PropertyMap({
       setMapStatus(`${initialMode} loaded`)
       if (is3DRef.current) {
         map.setTerrain({ source: 'atlas-terrain-dem', exaggeration: 1.55 })
-        map.easeTo({ pitch: 62, bearing: -18, duration: 0 })
+        map.easeTo({ pitch: 62, bearing: -18, duration: 900 })
       }
       drawParcel(map, parcelRef.current)
     })
@@ -427,21 +424,13 @@ export default function PropertyMap({
     setActiveOverlays((current) => [...new Set([...current, ...overlays])])
   }
 
-  function openWorld() {
-    setPlannerOpen(false)
-    setWorldOpen(true)
-  }
-
   return (
     <section className={`${compact ? 'atlas-map-shell compact-map' : 'atlas-map-shell'}${planningMode ? ' planning-map' : ''}${minimal ? ' minimal-map' : ''}`}>
-      {!planningMode && !minimal && worldOpen && <AtlasWorld property={property} parcel={parcel} parcelVerified={parcelVerified} onClose={() => setWorldOpen(false)} />}
-
       {!planningMode && !minimal && (
         <div className="atlas-map-toolbar">
           <div className="basemap-switch" aria-label="Base map">
-            <button className={worldOpen ? 'world-mode active' : 'world-mode'} onClick={openWorld}>World</button>
             {(['Aerial', 'Topographic'] as BaseMapMode[]).map((mode) => (
-              <button key={mode} className={!worldOpen && baseMap === mode ? 'active' : ''} onClick={() => { setWorldOpen(false); setBaseMap(mode) }}>{mode}</button>
+              <button key={mode} className={baseMap === mode ? 'active' : ''} onClick={() => setBaseMap(mode)}>{mode}</button>
             ))}
             <button className={is3D ? 'tilt-toggle active' : 'tilt-toggle'} onClick={() => setIs3D((value) => !value)} aria-pressed={is3D} aria-label="Toggle 3D terrain tilt" title="Tilt the current base map in 3D">3D</button>
           </div>
@@ -457,7 +446,7 @@ export default function PropertyMap({
 
       {!planningMode && !minimal && (
         <>
-          <button className={plannerOpen ? 'site-planner-launch active' : 'site-planner-launch'} onClick={() => { setWorldOpen(false); setPlannerOpen((open) => !open) }} aria-expanded={plannerOpen}>
+          <button className={plannerOpen ? 'site-planner-launch active' : 'site-planner-launch'} onClick={() => setPlannerOpen((open) => !open)} aria-expanded={plannerOpen}>
             <span>+</span>{plannerOpen ? 'Close planner' : 'Plan this property'}
           </button>
           {plannerOpen && (
@@ -490,10 +479,10 @@ export default function PropertyMap({
       {!planningMode && !minimal && (
         <>
           <div className="atlas-map-foot">
-            <div><span className="mini-label">MAP VIEW</span><strong>{worldOpen ? 'ATLAS World' : `${baseMap}${is3D ? ' · 3D' : ''}`}{!worldOpen && activeOverlays.length ? ` + ${activeOverlays.join(' + ')}` : ''}</strong><small>{worldOpen ? 'Interactive parcel world · drag to orbit' : mapStatus}{placements.length ? ` · ${placements.length} idea${placements.length === 1 ? '' : 's'} placed` : ''}</small></div>
+            <div><span className="mini-label">MAP VIEW</span><strong>{`${baseMap}${is3D ? ' · 3D' : ''}`}{activeOverlays.length ? ` + ${activeOverlays.join(' + ')}` : ''}</strong><small>{mapStatus}{placements.length ? ` · ${placements.length} idea${placements.length === 1 ? '' : 's'} placed` : ''}</small></div>
             <span className={parcelVerified ? 'map-proof verified' : 'map-proof'}>{parcelVerified ? 'Parcel verified' : 'Address located'}</span>
           </div>
-          {activeOverlays.length > 0 && !worldOpen && <div className="active-layer-legend"><strong>Layer status</strong>{activeOverlays.map((name) => <span key={name} className={layerStatus[name] ?? 'loading'}><i />{name}: {layerStatus[name] === 'visible' ? 'on map' : layerStatus[name] === 'error' ? 'unavailable' : 'loading'}</span>)}</div>}
+          {activeOverlays.length > 0 && <div className="active-layer-legend"><strong>Layer status</strong>{activeOverlays.map((name) => <span key={name} className={layerStatus[name] ?? 'loading'}><i />{name}: {layerStatus[name] === 'visible' ? 'on map' : layerStatus[name] === 'error' ? 'unavailable' : 'loading'}</span>)}</div>}
         </>
       )}
     </section>
