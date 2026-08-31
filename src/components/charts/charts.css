@@ -1,0 +1,52 @@
+.atlas-chart-card {
+  margin: 0 0 24px;
+  padding: 24px;
+  border: 1px solid rgba(28,43,69,.08);
+  border-radius: var(--atlas-radius-lg, 24px);
+  background: rgba(255,255,255,.94);
+  box-shadow: var(--atlas-shadow-soft, 0 20px 60px rgba(28,43,69,.08));
+}
+.atlas-chart-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+.atlas-chart-heading h3 {
+  margin: 6px 0 0;
+  font-family: Georgia, serif;
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--atlas-navy, #1c2b45);
+}
+.atlas-chart-heading p {
+  max-width: 520px;
+  margin: 0;
+  color: #6d7580;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.atlas-chart-frame {
+  min-height: 300px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,248,239,.75), rgba(255,255,255,.85));
+  overflow: hidden;
+}
+.atlas-chart-frame .recharts-text { fill: #7c8490; font-size: 10px; }
+.atlas-chart-frame .recharts-tooltip-wrapper { outline: none; }
+.atlas-range-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(28,43,69,.07);
+}
+.atlas-range-caption span { color: #868d97; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.atlas-range-caption strong { color: var(--atlas-navy, #1c2b45); font-size: 15px; }
+@media (max-width: 720px) {
+  .atlas-chart-heading { flex-direction: column; }
+  .atlas-chart-card { padding: 18px; }
+}
