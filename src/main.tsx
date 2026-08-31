@@ -22,15 +22,18 @@ import './value-story.css'
 import './land-at-glance.css'
 
 // maplibre-gl ships its tile/style worker as a separate prebuilt file
-// (maplibre-gl-worker.mjs) and resolves its URL at runtime relative to
-// wherever the main bundle happens to load from. Vite's default build never
-// copies that file into the output, so the worker request 404s (falls back
-// to index.html on this SPA host), the map's off-main-thread style/tile
-// processing silently fails, and the renderer eventually crashes with
-// "Cannot read properties of undefined (reading 'shaderPreludeCode')" —
-// the actual cause of the map going blank. We ship the file ourselves via
-// public/ and point maplibre-gl at it explicitly before any map is created.
-setWorkerUrl(new URL('/maplibre-gl-worker.mjs', import.meta.url).href)
+// (maplibre-gl-worker.mjs, plus a sibling maplibre-gl-shared.mjs it imports)
+// and resolves that URL at runtime relative to wherever the main bundle
+// happens to load from. Vite's default build never copies those files into
+// the output, so the worker request 404s (falls back to index.html on this
+// SPA host), the map's off-main-thread style/tile processing silently
+// fails, and the renderer eventually crashes with "Cannot read properties
+// of undefined (reading 'shaderPreludeCode')" — the actual cause of the
+// map going blank. Point maplibre-gl at the matching version on a CDN
+// instead of trying to bundle these ourselves; its sibling import resolves
+// against the same CDN URL automatically. Pin this to the installed
+// maplibre-gl version (package.json) whenever it's upgraded.
+setWorkerUrl('https://unpkg.com/maplibre-gl@6.6.0/dist/maplibre-gl-worker.mjs')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
