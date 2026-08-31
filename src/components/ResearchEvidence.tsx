@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { CountyPropertyRecord } from '../services/countyRecords'
 import type { ResearchProfile } from '../services/researchProfile'
 import { buildAtlasValuation } from '../services/valuationEngine'
+import MarketEvidenceChart from './charts/MarketEvidenceChart'
 
 function money(value: unknown) {
   const number = Number(value)
@@ -87,6 +88,7 @@ export function ResearchHomeValueSection({ profile }: { profile: ResearchProfile
   const sale = facts.sale ?? {}
   const classification = facts.classification ?? {}
   const estimates = facts.thirdPartyValueEstimates ?? {}
+  const atlasValuation = buildAtlasValuation(profile)
 
   return (
     <div className="data-section">
@@ -96,6 +98,7 @@ export function ResearchHomeValueSection({ profile }: { profile: ResearchProfile
       </div>
 
       <AtlasValuationCard profile={profile} />
+      {atlasValuation && <MarketEvidenceChart valuation={atlasValuation} />}
 
       <div className="source-plan-grid researched-fact-grid">
         <article className="intel-card">
