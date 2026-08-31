@@ -1,3 +1,5 @@
+import type { ParcelFeature } from './ohioProperty'
+
 type ArcFeature = {
   attributes?: Record<string, unknown>
   geometry?: { rings?: number[][][] }
@@ -14,12 +16,54 @@ export type IntelligenceFinding = {
   source: string
 }
 
+export type ParcelSoilUnit = {
+  name: string
+  symbol: string | null
+  farmland: string | null
+  capability: string | null
+  acres: number
+  percent: number
+}
+
+export type ParcelAnalysis = {
+  checkedAt: string
+  parcelAcres: number
+  analysisLevel: 'parcel-intersection'
+  flood: null | {
+    source: string
+    intersectingFeatures: number
+    mappedAcres: number
+    mappedPercent: number
+    sfhaAcres: number
+    sfhaPercent: number
+    zones: string[]
+  }
+  wetlands: null | {
+    source: string
+    intersectingFeatures: number
+    mappedAcres: number
+    mappedPercent: number
+    types: string[]
+  }
+  soils: null | {
+    source: string
+    intersectingFeatures: number
+    coveredAcres: number
+    coveredPercent: number
+    dominantUnit: ParcelSoilUnit | null
+    units: ParcelSoilUnit[]
+  }
+  unavailable: string[]
+  limitation: string
+}
+
 export type PropertyIntelligence = {
   soil: IntelligenceFinding
   flood: IntelligenceFinding
   wetlands: IntelligenceFinding
   terrain: IntelligenceFinding
   checkedAt: string
+  parcelAnalysis?: ParcelAnalysis | null
 }
 
 export const INTELLIGENCE_OVERLAYS = {
@@ -189,6 +233,107 @@ async function getTerrain(longitude: number, latitude: number): Promise<Intellig
     return { key: 'terrain', label: 'Terrain', status: 'Screened', value: `${Math.round(data.value).toLocaleString()} ft elevation`, detail: `USGS 3DEP interpolated point elevation${data.resolution ? ` at roughly ${data.resolution} m source resolution` : ''}. Use the Terrain, Topography and Slope layers to read the surrounding landform; this is not a surveyed elevation.`, source: 'USGS 3DEP / EPQS' }
   } catch {
     return { key: 'terrain', label: 'Terrain', status: 'Requires Verification', value: 'Elevation source unavailable', detail: 'USGS elevation data could not be reached during this check. Terrain map layers remain available.', source: 'USGS 3DEP' }
+  }
+}
+
+export async function getParcelIntelligence(parcel: ParcelFeature): Promise<ParcelAnalysis | null> {
+  try {
+    const response = await fetch('/api/parcel-analysis', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ geometry: parcel.geometry }),
+    })
+    if (!response.ok) return null
+    const data = await response.json() as ParcelAnalysis & { error?: string }
+    if (data.error || data.analysisLevel !== 'parcel-intersection') return null
+    return data
+  } catch {
+    return null
+  }
+}
+
+export function mergeParcelIntelligence(intelligence: PropertyIntelligence, parcelAnalysis: ParcelAnalysis | null): PropertyIntelligence {
+  if (!parcelAnalysis) return { ...intelligence, parcelAnalysis: null }
+
+  let flood = intelligence.flood
+  if (parcelAnalysis.flood) {
+    const result = parcelAnalysis.flood
+    if (result.sfhaPercent > 0) {
+      flood = {
+        key: 'flood',
+        label: 'Flood',
+        status: 'Problem',
+        value: `${result.sfhaPercent.toFixed(1)}% of parcel in mapped FEMA SFHA`,
+        detail: `${result.sfhaAcres.toFixed(2)} mapped acres intersect a Special Flood Hazard Area${result.zones.length ? ` (${result.zones.join(', ')})` : ''}. This is a parcel-wide GIS screen; confirm insurance, building and site implications with the appropriate official/professional sources.`,
+        source: result.source,
+      }
+    } else if (result.mappedPercent > 0) {
+      flood = {
+        key: 'flood',
+        label: 'Flood',
+        status: 'Requires Verification',
+        value: `${result.mappedPercent.toFixed(1)}% of parcel intersects mapped FEMA flood data`,
+        detail: `${result.mappedAcres.toFixed(2)} mapped acres intersect FEMA flood-hazard mapping, but the returned parcel intersection is not classified as a Special Flood Hazard Area. Review the mapped zone before relying on the area for a project.`,
+        source: result.source,
+      }
+    } else {
+      flood = {
+        key: 'flood',
+        label: 'Flood',
+        status: 'Screened',
+        value: 'No mapped FEMA flood polygon intersects the parcel',
+        detail: 'ATLAS screened the recorded parcel geometry against the available FEMA flood layer. This is stronger than an address-point check but is still mapping evidence, not a guarantee of future flooding or drainage conditions.',
+        source: result.source,
+      }
+    }
+  }
+
+  let wetlands = intelligence.wetlands
+  if (parcelAnalysis.wetlands) {
+    const result = parcelAnalysis.wetlands
+    if (result.mappedPercent > 0) {
+      wetlands = {
+        key: 'wetlands',
+        label: 'Wetlands',
+        status: 'Requires Verification',
+        value: `${result.mappedPercent.toFixed(1)}% of parcel overlaps mapped NWI wetlands`,
+        detail: `${result.mappedAcres.toFixed(2)} mapped acres overlap National Wetlands Inventory polygons${result.types.length ? ` (${result.types.slice(0, 3).join(', ')})` : ''}. NWI is a screening source, not a jurisdictional wetland determination.`,
+        source: result.source,
+      }
+    } else {
+      wetlands = {
+        key: 'wetlands',
+        label: 'Wetlands',
+        status: 'Screened',
+        value: 'No mapped NWI wetland intersects the parcel',
+        detail: 'ATLAS screened the recorded parcel geometry against National Wetlands Inventory mapping. Unmapped or field-confirmed wetland conditions can still exist.',
+        source: result.source,
+      }
+    }
+  }
+
+  let soil = intelligence.soil
+  if (parcelAnalysis.soils?.dominantUnit) {
+    const result = parcelAnalysis.soils
+    const dominant = result.dominantUnit
+    const unitCount = result.units.length
+    soil = {
+      key: 'soil',
+      label: 'Soil',
+      status: 'Screened',
+      value: `${dominant.name} · ${dominant.percent.toFixed(1)}% of mapped parcel`,
+      detail: `${dominant.acres.toFixed(2)} acres are mapped as the dominant soil unit${unitCount > 1 ? `; ATLAS found ${unitCount} soil units across the parcel` : ''}.${dominant.farmland ? ` Farmland class: ${dominant.farmland}.` : ''}${dominant.capability ? ` Non-irrigated capability class: ${dominant.capability}.` : ''} USDA mapping is useful planning evidence but not a site-specific soil or septic test.`,
+      source: result.source,
+    }
+  }
+
+  return {
+    ...intelligence,
+    flood,
+    wetlands,
+    soil,
+    parcelAnalysis,
+    checkedAt: parcelAnalysis.checkedAt || intelligence.checkedAt,
   }
 }
 
