@@ -1,0 +1,26 @@
+HOW TO APPLY THIS FIX (no terminal needed)
+===========================================
+
+This zip has the exact same folder layout as your repo. Easiest way in:
+
+OPTION A — Drag and drop (fastest)
+1. Go to github.com/HoltonHomes/holton-atlas
+2. Click "Add file" -> "Upload files" (top right of the file list)
+3. Extract this zip on your computer, then drag the "src" folder AND
+   the ".gitignore" file straight into that GitHub upload box.
+4. GitHub will show it's replacing the existing files at those same
+   paths - that's correct, that's the fix.
+5. Scroll down, add a commit message like "fix map glitch", and click
+   "Commit changes" (commit directly to main).
+
+OPTION B — One file at a time
+1. Open src/components/PropertyMap.tsx in this folder, select all, copy.
+2. On GitHub, open src/components/PropertyMap.tsx, click the pencil
+   (edit) icon, select all, paste, then "Commit directly to main".
+3. Repeat for src/components/PropertyStudio.tsx and
+   src/components/property-studio.css.
+4. Add .gitignore at the repo root the same way (use "Create new file"
+   since it doesn't exist yet).
+
+Either way, once it's on the main branch, Cloudflare should redeploy
+the site on its own.
