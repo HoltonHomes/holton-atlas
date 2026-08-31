@@ -1,3 +1,5 @@
+import { researchProfileSchema } from '../schemas/property'
+
 export type ResearchProfile = {
   display_address: string
   county: string | null
@@ -43,8 +45,11 @@ export async function getResearchProfile(address: string): Promise<ResearchProfi
   })
 
   if (!response.ok) return null
-  const rows = await response.json() as ResearchProfile[]
-  return rows[0] ?? null
+  const raw = await response.json()
+  const rows = Array.isArray(raw) ? raw : []
+  const parsed = rows[0] ? researchProfileSchema.safeParse(rows[0]) : null
+  if (!parsed?.success) return null
+  return parsed.data as ResearchProfile
 }
 
 export function researchNumber(profile: ResearchProfile | null, path: string[]): number | null {
