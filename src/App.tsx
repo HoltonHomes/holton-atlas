@@ -10,13 +10,14 @@ import type { CountyPropertyRecord } from './services/countyRecords'
 import { getResearchProfile, researchNumber, researchText } from './services/researchProfile'
 import type { ResearchProfile } from './services/researchProfile'
 import { buildAtlasValuation } from './services/valuationEngine'
-import { HomeValueSection, IntelligenceStrip, RisksSection, CostsSection } from './components/IntelligenceReport'
+import { HomeValueSection, RisksSection, CostsSection } from './components/IntelligenceReport'
 import { ResearchCostsSection, ResearchHomeValueSection } from './components/ResearchEvidence'
 import PropertyMap from './components/PropertyMap'
 import PlanConfigurator from './components/PlanConfigurator'
 import ClientDecisionGuide from './components/ClientDecisionGuide'
 import ComparableHomes from './components/ComparableHomes'
 import PropertyResearch from './components/PropertyResearch'
+import LandAtGlance from './components/LandAtGlance'
 
 const clientNav = ['Summary', 'Price', 'Homes', 'Property', 'Research'] as const
 type ClientSection = typeof clientNav[number]
@@ -280,18 +281,13 @@ export default function App() {
                   <ClientDecisionGuide intent={clientIntent} parcelVerified={Boolean(parcel)} landReady={Boolean(intelligence)} marketReady={Boolean(researchProfile || valuation)} zoningKnown={Boolean(zoning)} acres={acres} onOpen={setActiveSection} />
                   <div className="client-brief-grid">{briefItems.map((item, index) => <motion.article key={`${item.label}-${index}`} className={item.tone === 'attention' ? 'client-brief-item attention' : 'client-brief-item'} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }}><span>{item.label}</span><strong>{item.title}</strong><p>{item.detail}</p></motion.article>)}</div>
                   <section className="jacob-take"><div><span>JACOB'S TAKE</span><strong>{intentCopy.take}</strong></div><p>ATLAS should make the next question obvious. Mapped evidence is screening evidence; surveys, inspections, title work, permits, local rules and professional opinions still matter when the decision gets serious.</p></section>
-                  <section className="summary-next-actions">
-                    <button type="button" onClick={() => setActiveSection('Price')}><span>START WITH PRICE</span><strong>{clientIntent === 'seller' ? 'What might this property sell for?' : 'Does the price make sense?'}</strong></button>
-                    <button type="button" onClick={() => setActiveSection('Property')}><span>UNDERSTAND THE PROPERTY</span><strong>See the parcel, land and possibilities.</strong></button>
-                    <button type="button" onClick={() => setActiveSection('Research')}><span>CHECK THE UNKNOWNS</span><strong>See what still needs verified.</strong></button>
-                  </section>
                 </>
               )}
 
               {activeSection === 'Price' && (
                 <div className="client-workspace money-workspace">
-                  <div className="client-workspace-heading"><div><span>{clientIntent === 'seller' ? 'ESTIMATED MARKET RANGE' : 'PRICE CONTEXT'}</span><h2>{clientIntent === 'seller' ? 'What the market evidence currently supports.' : 'Does the asking price fit the evidence?'}</h2></div><p>Closed-market evidence carries the most weight. Automated estimates remain supporting evidence. County appraisal stays in tax context instead of pretending to be market value.</p></div>
-                  {researchProfile ? <ResearchHomeValueSection profile={researchProfile} /> : <HomeValueSection parcelVerified={Boolean(parcel)} county={locatedProperty.county} record={countyRecord} />}
+                  <div className="client-workspace-heading"><div><span>{clientIntent === 'seller' ? 'ESTIMATED MARKET RANGE' : 'PRICE CONTEXT'}</span><h2>{clientIntent === 'seller' ? 'What the market evidence currently supports.' : 'What does the market evidence support?'}</h2></div><p>Closed-market evidence carries the most weight. Automated estimates remain supporting evidence. County appraisal stays in tax context instead of pretending to be market value.</p></div>
+                  {researchProfile ? <ResearchHomeValueSection profile={researchProfile} intent={clientIntent} /> : <HomeValueSection parcelVerified={Boolean(parcel)} county={locatedProperty.county} record={countyRecord} />}
                   <details className="price-costs-drawer"><summary>Taxes & ownership-cost context</summary>{researchProfile ? <ResearchCostsSection profile={researchProfile} countyRecord={countyRecord} /> : <CostsSection county={locatedProperty.county} record={countyRecord} />}</details>
                 </div>
               )}
@@ -300,12 +296,12 @@ export default function App() {
 
               {activeSection === 'Property' && (
                 <div className="client-workspace">
-                  <div className="client-workspace-heading"><div><span>UNDERSTAND THE PROPERTY</span><h2>What are you actually buying—or selling?</h2></div><p>The property map is the evidence canvas. Aerial, parcel, terrain, soils, water, flood and wetlands stay together instead of becoming seven different pages.</p></div>
+                  <div className="client-workspace-heading"><div><span>UNDERSTAND THE PROPERTY</span><h2>What are you actually buying—or selling?</h2></div><p>ATLAS translates parcel, terrain, soil, flood and wetland evidence into plain English first. The map is there when you want to inspect the evidence yourself.</p></div>
+                  <LandAtGlance intelligence={intelligence} />
                   <PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} />
-                  <IntelligenceStrip intelligence={intelligence} loading={!intelligence} />
                   <div className="explore-two-up">
                     <article><span>HOME & SITE</span><strong>{livingArea ? `${bedrooms ?? '—'} bd · ${fullBaths ?? '—'} ba · ${livingArea.toLocaleString()} sf` : 'Home facts need verification'}</strong><p>{yearBuilt ? `Built ${yearBuilt}. ` : ''}{acres ? `${acres.toFixed(2)} acres. ` : ''}{zoning ? `${zoning} zoning reference.` : 'Local zoning still needs verification.'}</p></article>
-                    <article><span>{intelligence?.parcelAnalysis ? 'PARCEL-WIDE SCREEN' : 'SCREENING LEVEL'}</span><strong>{intelligence?.parcelAnalysis ? 'ATLAS checked the parcel—not only the address point.' : 'Some environmental evidence is still point-level.'}</strong><p>{intelligence?.parcelAnalysis ? 'Flood, wetlands and soil findings now reflect intersections with the recorded parcel geometry. Terrain remains screening-level until parcel-wide slope sampling is added.' : 'ATLAS keeps the technical source underneath while showing exactly where the current evidence stops.'}</p></article>
+                    <article><span>{intelligence?.parcelAnalysis ? 'PARCEL-WIDE SCREEN' : 'SCREENING LEVEL'}</span><strong>{intelligence?.parcelAnalysis ? 'ATLAS checked the parcel—not only the address point.' : 'Some environmental evidence is still point-level.'}</strong><p>{intelligence?.parcelAnalysis ? 'Flood, wetlands and soil findings reflect intersections with the recorded parcel geometry. Terrain remains screening-level until parcel-wide slope sampling is added.' : 'ATLAS keeps the technical source underneath while showing exactly where the current evidence stops.'}</p></article>
                   </div>
                   <details className="possibilities-drawer"><summary><span>IMAGINE THE POSSIBILITIES</span><strong>Could this property fit what I want to do?</strong><small>Open the concept planner</small></summary><PlanConfigurator property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} intelligence={intelligence} acres={acres} zoningKnown={Boolean(zoning)} /></details>
                 </div>
