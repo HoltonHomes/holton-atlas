@@ -1,8 +1,7 @@
-import { useState, type CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import type { LocatedProperty, ParcelFeature } from '../services/ohioProperty'
 import type { PropertyIntelligence } from '../services/propertyIntelligence'
 import PropertyMap from './PropertyMap'
-import PlanConfigurator from './PlanConfigurator'
 import './property-studio.css'
 
 function percent(value: number | null | undefined) {
@@ -20,16 +19,15 @@ export default function PropertyStudio({
   parcelVerified,
   intelligence,
   acres,
-  zoningKnown,
+  onOpenPlan,
 }: {
   property: LocatedProperty
   parcel: ParcelFeature | null
   parcelVerified: boolean
   intelligence: PropertyIntelligence | null
   acres: number | null
-  zoningKnown: boolean
+  onOpenPlan: () => void
 }) {
-  const [plannerOpen, setPlannerOpen] = useState(false)
   const analysis = intelligence?.parcelAnalysis ?? null
   const slope = analysis?.slope ?? null
   const flood = analysis?.flood ?? null
@@ -58,15 +56,7 @@ export default function PropertyStudio({
             <span>INTERACTIVE LAND CANVAS</span>
             <strong>{property.address}</strong>
           </div>
-          {plannerOpen ? (
-            <div className="studio-map-paused">
-              <span>PLANNER OPEN</span>
-              <strong>This map moved to the planner below.</strong>
-              <p>Only one live map runs at a time — close the planner to come back to the browse view.</p>
-            </div>
-          ) : (
-            <PropertyMap property={property} parcel={parcel} parcelVerified={parcelVerified} />
-          )}
+          <PropertyMap property={property} parcel={parcel} parcelVerified={parcelVerified} />
         </div>
 
         <aside className="studio-intelligence-rail">
@@ -107,9 +97,9 @@ export default function PropertyStudio({
               <b><i style={{ width: `${Math.min(100, water?.waterbodyPercent ?? 0)}%` }} /></b>
             </div>
           </div>
-          <button className="studio-plan-button" type="button" onClick={() => setPlannerOpen((open) => !open)} aria-expanded={plannerOpen}>
-            <span>{plannerOpen ? '×' : '+'}</span>
-            <div><strong>{plannerOpen ? 'Close site planner' : 'Plan on this property'}</strong><small>Place a barn, garden, pasture, pond or drive</small></div>
+          <button className="studio-plan-button" type="button" onClick={onOpenPlan}>
+            <span>+</span>
+            <div><strong>What could this work for?</strong><small>Place a barn, garden, pasture, pond or drive</small></div>
           </button>
 
           <footer>
@@ -118,12 +108,6 @@ export default function PropertyStudio({
           </footer>
         </aside>
       </div>
-
-      {plannerOpen ? (
-        <div className="studio-planner-drawer">
-          <PlanConfigurator property={property} parcel={parcel} parcelVerified={parcelVerified} intelligence={intelligence} acres={acres} zoningKnown={zoningKnown} />
-        </div>
-      ) : null}
     </section>
   )
 }
