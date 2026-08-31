@@ -1,26 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { LngLatBounds, Map as MapLibreMap, Marker, NavigationControl } from 'maplibre-gl'
 import type { GeoJSONSource, StyleSpecification } from 'maplibre-gl'
+import { booleanPointInPolygon, point } from '@turf/turf'
 import type { LocatedProperty, ParcelFeature } from '../services/ohioProperty'
 import { INTELLIGENCE_OVERLAYS } from '../services/propertyIntelligence'
 import AtlasWorld from './world/AtlasWorld'
 
 export type BaseMapMode = 'Aerial' | 'Terrain' | 'Topographic'
 export type PlannerName = 'Barn' | 'Garden' | 'Poultry' | 'Pasture' | 'Goats' | 'Orchard' | 'Pond' | 'Driveway'
-export type PlanSummary = { count: number; estimatedAcres: number; byType: Partial<Record<PlannerName, number>> }
+export type PlanSummary = { count: number; byType: Partial<Record<PlannerName, number>> }
 
-type PlannerItem = { name: PlannerName; icon: string; color: string; overlays: string[]; acres: number }
+type PlannerItem = { name: PlannerName; icon: string; color: string; overlays: string[] }
 type PlannerPlacement = { id: number; name: PlannerName; longitude: number; latitude: number }
 
 const PLANNER_ITEMS: PlannerItem[] = [
-  { name: 'Barn', icon: '⌂', color: '#d95f82', overlays: ['Flood', 'Wetlands'], acres: 0.08 },
-  { name: 'Garden', icon: '◫', color: '#94647a', overlays: ['Soils', 'Water'], acres: 0.10 },
-  { name: 'Poultry', icon: '◉', color: '#b46a85', overlays: ['Flood'], acres: 0.03 },
-  { name: 'Pasture', icon: '▱', color: '#766779', overlays: ['Soils', 'Water'], acres: 0.50 },
-  { name: 'Goats', icon: '◇', color: '#8b6176', overlays: ['Soils', 'Water', 'Flood'], acres: 0.25 },
-  { name: 'Orchard', icon: '♢', color: '#ad6984', overlays: ['Soils', 'Water'], acres: 0.20 },
-  { name: 'Pond', icon: '≈', color: '#526b86', overlays: ['Water', 'Wetlands'], acres: 0.15 },
-  { name: 'Driveway', icon: '↗', color: '#586576', overlays: ['Water'], acres: 0.06 },
+  { name: 'Barn', icon: '⌂', color: '#d95f82', overlays: ['Flood', 'Wetlands'] },
+  { name: 'Garden', icon: '◫', color: '#94647a', overlays: ['Soils', 'Water'] },
+  { name: 'Poultry', icon: '◉', color: '#b46a85', overlays: ['Flood'] },
+  { name: 'Pasture', icon: '▱', color: '#766779', overlays: ['Soils', 'Water'] },
+  { name: 'Goats', icon: '◇', color: '#8b6176', overlays: ['Soils', 'Water', 'Flood'] },
+  { name: 'Orchard', icon: '♢', color: '#ad6984', overlays: ['Soils', 'Water'] },
+  { name: 'Pond', icon: '≈', color: '#526b86', overlays: ['Water', 'Wetlands'] },
+  { name: 'Driveway', icon: '↗', color: '#586576', overlays: ['Water'] },
 ]
 
 const BASEMAPS: Record<BaseMapMode, { tile: string; attribution: string; maxZoom: number }> = {
@@ -76,6 +77,15 @@ function overlayId(name: string) {
   return `atlas-overlay-${name.toLowerCase().replaceAll(' ', '-')}`
 }
 
+function locationInsideParcel(parcel: ParcelFeature | null, longitude: number, latitude: number) {
+  if (!parcel?.geometry || (parcel.geometry.type !== 'Polygon' && parcel.geometry.type !== 'MultiPolygon')) return false
+  try {
+    return booleanPointInPolygon(point([longitude, latitude]), parcel.geometry as any)
+  } catch {
+    return false
+  }
+}
+
 export default function PropertyMap({
   property,
   parcel,
@@ -97,6 +107,7 @@ export default function PropertyMap({
   const mapRef = useRef<MapLibreMap | null>(null)
   const markerRef = useRef<Marker | null>(null)
   const planningMarkersRef = useRef<Map<number, Marker>>(new Map())
+  const parcelRef = useRef<ParcelFeature | null>(parcel)
   const [baseMap, setBaseMap] = useState<BaseMapMode>('Aerial')
   const [activeOverlays, setActiveOverlays] = useState<string[]>([])
   const [mapStatus, setMapStatus] = useState('Map ready')
@@ -104,6 +115,7 @@ export default function PropertyMap({
   const [plannerOpen, setPlannerOpen] = useState(planningMode)
   const [plannerTool, setPlannerTool] = useState<PlannerName>(planningTool ?? 'Barn')
   const [placements, setPlacements] = useState<PlannerPlacement[]>([])
+  const [plannerMessage, setPlannerMessage] = useState('')
   const [worldOpen, setWorldOpen] = useState(false)
   const baseMapRef = useRef<BaseMapMode>(baseMap)
   const plannerOpenRef = useRef(plannerOpen || planningMode)
@@ -111,6 +123,7 @@ export default function PropertyMap({
   baseMapRef.current = baseMap
   plannerOpenRef.current = plannerOpen || planningMode
   plannerToolRef.current = plannerTool
+  parcelRef.current = parcel
 
   const overlayNames = useMemo(() => ['Soils', 'Water', 'Flood', 'Wetlands'], [])
 
@@ -145,7 +158,7 @@ export default function PropertyMap({
 
     map.on('load', () => {
       setMapStatus('Aerial loaded')
-      drawParcel(map, parcel)
+      drawParcel(map, parcelRef.current)
     })
 
     map.on('error', (event) => {
@@ -166,6 +179,16 @@ export default function PropertyMap({
 
     map.on('click', (event) => {
       if (!plannerOpenRef.current) return
+      const activeParcel = parcelRef.current
+      if (!activeParcel) {
+        setPlannerMessage('Verify the parcel boundary before placing concepts.')
+        return
+      }
+      if (!locationInsideParcel(activeParcel, event.lngLat.lng, event.lngLat.lat)) {
+        setPlannerMessage('Place concepts inside the verified parcel boundary.')
+        return
+      }
+      setPlannerMessage('')
       const tool = plannerToolRef.current
       setPlacements((current) => [...current, { id: Date.now() + current.length, name: tool, longitude: event.lngLat.lng, latitude: event.lngLat.lat }])
     })
@@ -250,10 +273,17 @@ export default function PropertyMap({
       element.type = 'button'
       element.title = `${item.name} concept · drag to move`
       element.setAttribute('aria-label', `${item.name} concept; drag to move`)
-      element.innerHTML = `<span>${item.icon}</span><strong>${item.name}</strong><small>${item.acres.toFixed(2)} ac</small>`
+      element.innerHTML = `<span>${item.icon}</span><strong>${item.name}</strong><small>concept</small>`
       const marker = new Marker({ element, draggable: true, anchor: 'bottom' }).setLngLat([placement.longitude, placement.latitude]).addTo(map)
       marker.on('dragend', () => {
         const location = marker.getLngLat()
+        const activeParcel = parcelRef.current
+        if (!activeParcel || !locationInsideParcel(activeParcel, location.lng, location.lat)) {
+          marker.setLngLat([placement.longitude, placement.latitude])
+          setPlannerMessage(activeParcel ? 'Concepts must stay inside the verified parcel boundary.' : 'Verify the parcel boundary before moving concepts.')
+          return
+        }
+        setPlannerMessage('')
         setPlacements((current) => current.map((candidate) => candidate.id === placement.id ? { ...candidate, longitude: location.lng, latitude: location.lat } : candidate))
       })
       planningMarkersRef.current.set(placement.id, marker)
@@ -263,12 +293,10 @@ export default function PropertyMap({
   useEffect(() => {
     if (!onPlanChange) return
     const byType: Partial<Record<PlannerName, number>> = {}
-    let estimatedAcres = 0
     placements.forEach((placement) => {
       byType[placement.name] = (byType[placement.name] ?? 0) + 1
-      estimatedAcres += PLANNER_ITEMS.find((item) => item.name === placement.name)?.acres ?? 0
     })
-    onPlanChange({ count: placements.length, estimatedAcres, byType })
+    onPlanChange({ count: placements.length, byType })
   }, [placements, onPlanChange])
 
   function drawParcel(map: MapLibreMap, nextParcel: ParcelFeature | null) {
@@ -375,7 +403,7 @@ export default function PropertyMap({
                   <button key={item.name} className={plannerTool === item.name ? 'active' : ''} onClick={() => choosePlannerTool(item.name)}><span>{item.icon}</span><strong>{item.name}</strong></button>
                 ))}
               </div>
-              <p className="planner-hint"><i />Tap the map to place · drag to move</p>
+              <p className="planner-hint"><i />Tap inside the parcel to place · drag to move</p>
               <div className="planner-actions"><button disabled={!placements.length} onClick={() => setPlacements((current) => current.slice(0, -1))}>Undo</button><button disabled={!placements.length} onClick={() => setPlacements([])}>Clear all</button></div>
               <small>Concept only · verify survey, setbacks, septic and permits</small>
             </aside>
@@ -385,10 +413,12 @@ export default function PropertyMap({
 
       {planningMode && (
         <div className="planning-map-hud">
-          <div><span>PLACING</span><strong>{plannerTool}</strong><small>Tap to add · drag to move</small></div>
+          <div><span>PLACING</span><strong>{plannerTool}</strong><small>{parcelVerified ? 'Tap inside parcel · drag to move' : 'Parcel verification required'}</small></div>
           <div className="planning-map-actions"><button disabled={!placements.length} onClick={() => setPlacements((current) => current.slice(0, -1))}>Undo</button><button disabled={!placements.length} onClick={() => setPlacements([])}>Clear</button></div>
         </div>
       )}
+
+      {planningMode && plannerMessage && <div className="planning-map-message" role="status">{plannerMessage}</div>}
 
       <div ref={containerRef} className="atlas-map-canvas" />
 
