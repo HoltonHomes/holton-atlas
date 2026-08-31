@@ -18,10 +18,17 @@ import ClientDecisionGuide from './components/ClientDecisionGuide'
 import ComparableHomes from './components/ComparableHomes'
 import PropertyResearch from './components/PropertyResearch'
 import LandAtGlance from './components/LandAtGlance'
+import PropertyStudio from './components/PropertyStudio'
+import HomeownerOverview from './components/HomeownerOverview'
 
-const clientNav = ['Summary', 'Price', 'Homes', 'Property', 'Research'] as const
-type ClientSection = typeof clientNav[number]
 type ClientIntent = 'buyer' | 'seller' | 'researcher'
+type ClientSection = 'Brief' | 'Explore' | 'Plan' | 'Money' | 'Property' | 'Strategy' | 'Value' | 'Research'
+
+const NAV_BY_INTENT: Record<ClientIntent, ClientSection[]> = {
+  buyer: ['Brief', 'Explore', 'Plan', 'Money'],
+  seller: ['Brief', 'Property', 'Strategy', 'Value'],
+  researcher: ['Brief', 'Explore', 'Research', 'Money'],
+}
 
 function money(value: unknown) {
   const number = Number(value)
@@ -72,13 +79,13 @@ export default function App() {
   const [intelligence, setIntelligence] = useState<PropertyIntelligence | null>(null)
   const [searchStatus, setSearchStatus] = useState('')
   const [isSearching, setIsSearching] = useState(false)
-  const [activeSection, setActiveSection] = useState<ClientSection>('Summary')
+  const [activeSection, setActiveSection] = useState<ClientSection>('Brief')
   const [clientIntent, setClientIntent] = useState<ClientIntent | null>(null)
   const hasProperty = Boolean(locatedProperty)
 
   function chooseIntent(intent: ClientIntent) {
     setClientIntent(intent)
-    setActiveSection('Summary')
+    setActiveSection('Brief')
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -93,7 +100,7 @@ export default function App() {
     setParcel(null)
     setParcelProvider(null)
     setIntelligence(null)
-    setActiveSection('Summary')
+    setActiveSection('Brief')
     setSearchStatus('Finding the property and assembling the evidence…')
 
     try {
@@ -155,6 +162,11 @@ export default function App() {
   const parcelZoning = firstValue(properties, ['ZoneType', 'ZONING', 'Zoning', 'ZONE'])
   const zoning = researchText(researchProfile, ['zoning', 'value']) ?? (parcelZoning ? String(parcelZoning) : null)
   const valuation = buildAtlasValuation(researchProfile)
+  const salePrice = researchNumber(researchProfile, ['sale', 'price']) ?? countyRecord?.salePrice ?? valuation?.subjectSaleOriginal ?? null
+  const annualTaxDisplay = researchText(researchProfile, ['tax', 'annualTaxDisplay']) ?? (countyRecord?.currentTax ? money(countyRecord.currentTax) : null)
+  const classificationMls = researchText(researchProfile, ['classification', 'mlsDisplay'])
+  const classificationPublic = researchText(researchProfile, ['classification', 'publicRecordDisplay']) ?? countyRecord?.class ?? countyRecord?.landUse ?? null
+  const clientNav = clientIntent ? NAV_BY_INTENT[clientIntent] : NAV_BY_INTENT.buyer
 
   const briefItems = useMemo(() => {
     const rows: Array<{ label: string; title: string; detail: string; tone?: string }> = []
@@ -188,7 +200,7 @@ export default function App() {
         }
 
   return (
-    <main className={hasProperty ? 'site-shell client-atlas' : 'site-shell'}>
+    <main className={hasProperty ? `site-shell client-atlas room-${activeSection.toLowerCase()}` : 'site-shell'}>
       <nav className="nav-shell client-brandbar" aria-label="Primary navigation">
         <a className="brand" href="/" aria-label="ATLAS home"><span className="brand-mark">A</span><span><strong>ATLAS</strong><small>by Holton Homes</small></span></a>
         <span className="nav-status">Property Intelligence by Holton Homes</span>
@@ -269,46 +281,73 @@ export default function App() {
             </div>
           </section>
 
-          <nav className="client-room-nav five-part-nav" aria-label="ATLAS property report">
+          <nav className="client-room-nav" aria-label="ATLAS property room">
             {clientNav.map((item, index) => <button key={item} className={activeSection === item ? 'active' : ''} onClick={() => setActiveSection(item)}><i>{String(index + 1).padStart(2, '0')}</i><span>{item}</span></button>)}
           </nav>
 
           <AnimatePresence mode="wait">
             <motion.section key={`${clientIntent}-${activeSection}`} className="report-content client-room-content" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .3, ease: [0.22, 1, 0.36, 1] }}>
-              {activeSection === 'Summary' && (
+              {activeSection === 'Brief' && (
                 <>
                   <section className="client-brief-intro"><div><span>{intentCopy.eyebrow}</span><h2>{intentCopy.title}</h2></div><p>{intentCopy.detail}</p></section>
                   <ClientDecisionGuide intent={clientIntent} parcelVerified={Boolean(parcel)} landReady={Boolean(intelligence)} marketReady={Boolean(researchProfile || valuation)} zoningKnown={Boolean(zoning)} acres={acres} onOpen={setActiveSection} />
-                  <div className="client-brief-grid">{briefItems.map((item, index) => <motion.article key={`${item.label}-${index}`} className={item.tone === 'attention' ? 'client-brief-item attention' : 'client-brief-item'} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }}><span>{item.label}</span><strong>{item.title}</strong><p>{item.detail}</p></motion.article>)}</div>
+                  {clientIntent === 'seller' ? (
+                    <HomeownerOverview
+                      researchProfile={researchProfile}
+                      intelligence={intelligence}
+                      countyRecord={countyRecord}
+                      acres={acres}
+                      livingArea={livingArea}
+                      bedrooms={bedrooms}
+                      baths={fullBaths}
+                      salePrice={salePrice}
+                      annualTaxDisplay={annualTaxDisplay}
+                      parcelId={parcelId}
+                      zoning={zoning}
+                      classificationMls={classificationMls}
+                      classificationPublic={classificationPublic}
+                      onOpenValue={() => setActiveSection('Value')}
+                      onOpenLand={() => setActiveSection('Property')}
+                      onOpenRisks={() => setActiveSection('Strategy')}
+                    />
+                  ) : (
+                    <div className="client-brief-grid">{briefItems.slice(0, 4).map((item, index) => <motion.article key={`${item.label}-${index}`} className={item.tone === 'attention' ? 'client-brief-item attention' : 'client-brief-item'} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }}><span>{item.label}</span><strong>{item.title}</strong><p>{item.detail}</p></motion.article>)}</div>
+                  )}
                   <section className="jacob-take"><div><span>JACOB'S TAKE</span><strong>{intentCopy.take}</strong></div><p>ATLAS should make the next question obvious. Mapped evidence is screening evidence; surveys, inspections, title work, permits, local rules and professional opinions still matter when the decision gets serious.</p></section>
                 </>
               )}
 
-              {activeSection === 'Price' && (
+              {(activeSection === 'Money' || activeSection === 'Value') && (
                 <div className="client-workspace money-workspace">
-                  <div className="client-workspace-heading"><div><span>{clientIntent === 'seller' ? 'ESTIMATED MARKET RANGE' : 'PRICE CONTEXT'}</span><h2>{clientIntent === 'seller' ? 'What the market evidence currently supports.' : 'What does the market evidence support?'}</h2></div><p>Closed-market evidence carries the most weight. Automated estimates remain supporting evidence. County appraisal stays in tax context instead of pretending to be market value.</p></div>
+                  <div className="client-workspace-heading"><div><span>{activeSection === 'Value' ? 'SELLER VALUE ROOM' : 'MONEY & OWNERSHIP'}</span><h2>{activeSection === 'Value' ? 'What the market evidence currently supports.' : 'Price, comparisons and ownership costs in one place.'}</h2></div><p>Closed-market evidence carries the most weight. Automated estimates remain supporting evidence. County appraisal stays in tax context instead of pretending to be market value.</p></div>
                   {researchProfile ? <ResearchHomeValueSection profile={researchProfile} intent={clientIntent} /> : <HomeValueSection parcelVerified={Boolean(parcel)} county={locatedProperty.county} record={countyRecord} />}
+                  <ComparableHomes profile={researchProfile} livingArea={livingArea} acres={acres} yearBuilt={yearBuilt} />
                   <details className="price-costs-drawer"><summary>Taxes & ownership-cost context</summary>{researchProfile ? <ResearchCostsSection profile={researchProfile} countyRecord={countyRecord} /> : <CostsSection county={locatedProperty.county} record={countyRecord} />}</details>
                 </div>
               )}
 
-              {activeSection === 'Homes' && <ComparableHomes profile={researchProfile} livingArea={livingArea} acres={acres} yearBuilt={yearBuilt} />}
-
-              {activeSection === 'Property' && (
-                <div className="client-workspace">
-                  <div className="client-workspace-heading"><div><span>UNDERSTAND THE PROPERTY</span><h2>What are you actually buying—or selling?</h2></div><p>ATLAS translates parcel, terrain, soil, flood and wetland evidence into plain English first. The map is there when you want to inspect the evidence yourself.</p></div>
+              {(activeSection === 'Explore' || activeSection === 'Property') && (
+                <div className="client-workspace property-workspace">
+                  <PropertyStudio property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} intelligence={intelligence} acres={acres} zoningKnown={Boolean(zoning)} />
                   <LandAtGlance intelligence={intelligence} />
-                  <PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} />
                   <div className="explore-two-up">
                     <article><span>HOME & SITE</span><strong>{livingArea ? `${bedrooms ?? '—'} bd · ${fullBaths ?? '—'} ba · ${livingArea.toLocaleString()} sf` : 'Home facts need verification'}</strong><p>{yearBuilt ? `Built ${yearBuilt}. ` : ''}{acres ? `${acres.toFixed(2)} acres. ` : ''}{zoning ? `${zoning} zoning reference.` : 'Local zoning still needs verification.'}</p></article>
                     <article><span>{intelligence?.parcelAnalysis ? 'PARCEL-WIDE SCREEN' : 'SCREENING LEVEL'}</span><strong>{intelligence?.parcelAnalysis ? 'ATLAS checked the parcel—not only the address point.' : 'Some environmental evidence is still point-level.'}</strong><p>{intelligence?.parcelAnalysis ? `Flood, wetlands and soil findings reflect the recorded parcel${intelligence.parcelAnalysis.slope ? '; terrain is sampled across it' : ''}${intelligence.parcelAnalysis.water ? '; mapped surface water is included' : ''}.` : 'ATLAS keeps the technical source underneath while showing exactly where the current evidence stops.'}</p></article>
                   </div>
-                  <details className="possibilities-drawer"><summary><span>IMAGINE THE POSSIBILITIES</span><strong>Could this property fit what I want to do?</strong><small>Open the concept planner</small></summary><PlanConfigurator property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} intelligence={intelligence} acres={acres} zoningKnown={Boolean(zoning)} /></details>
                 </div>
               )}
 
-              {activeSection === 'Research' && (
+              {activeSection === 'Plan' && (
+                <div className="client-workspace plan-room-workspace">
+                  <div className="client-workspace-heading"><div><span>PROPERTY PLAN ROOM</span><h2>Put the idea on the land.</h2></div><p>Choose what you want to do, see the evidence behind the answer, then place the concept on the recorded parcel.</p></div>
+                  <PlanConfigurator property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} intelligence={intelligence} acres={acres} zoningKnown={Boolean(zoning)} />
+                  <PropertyResearch intelligence={intelligence} parcelVerified={Boolean(parcel)} acres={acres} zoning={zoning} county={locatedProperty.county} hasCauv={countyRecord ? countyRecord.hasCauv : null} />
+                </div>
+              )}
+
+              {(activeSection === 'Strategy' || activeSection === 'Research') && (
                 <div className="client-workspace research-workspace">
+                  {activeSection === 'Strategy' && <ComparableHomes profile={researchProfile} livingArea={livingArea} acres={acres} yearBuilt={yearBuilt} />}
                   <PropertyResearch intelligence={intelligence} parcelVerified={Boolean(parcel)} acres={acres} zoning={zoning} county={locatedProperty.county} hasCauv={countyRecord ? countyRecord.hasCauv : null} />
                   <RisksSection intelligence={intelligence} county={locatedProperty.county} parcelVerified={Boolean(parcel)} />
                   <section className="client-evidence-drawer in-research">
