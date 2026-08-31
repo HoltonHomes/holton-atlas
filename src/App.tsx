@@ -10,9 +10,10 @@ import type { CountyPropertyRecord } from './services/countyRecords'
 import { getResearchProfile, researchNumber, researchText } from './services/researchProfile'
 import type { ResearchProfile } from './services/researchProfile'
 import { buildAtlasValuation } from './services/valuationEngine'
-import { HomeValueSection, IntelligenceStrip, RisksSection, RuralPotentialSection, CostsSection } from './components/IntelligenceReport'
+import { HomeValueSection, IntelligenceStrip, RisksSection, CostsSection } from './components/IntelligenceReport'
 import { ResearchCostsSection, ResearchHomeValueSection } from './components/ResearchEvidence'
 import PropertyMap from './components/PropertyMap'
+import PlanConfigurator from './components/PlanConfigurator'
 import HomeownerOverview from './components/HomeownerOverview'
 
 const clientNav = ['Brief', 'Explore', 'Plan', 'Money'] as const
@@ -224,11 +225,14 @@ export default function App() {
               )}
 
               {activeSection === 'Plan' && (
-                <div className="client-workspace">
-                  <div className="client-workspace-heading"><span>PLAN THE PROPERTY</span><h2>What could life here look like?</h2><p>Use the property itself as the canvas, then let ATLAS flag what should be checked before an idea becomes a plan.</p></div>
-                  <PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} />
-                  <RuralPotentialSection intelligence={intelligence} acres={acres} zoningKnown={Boolean(zoning)} />
-                </div>
+                <PlanConfigurator
+                  property={locatedProperty}
+                  parcel={parcel}
+                  parcelVerified={Boolean(parcel)}
+                  intelligence={intelligence}
+                  acres={acres}
+                  zoningKnown={Boolean(zoning)}
+                />
               )}
 
               {activeSection === 'Money' && (
