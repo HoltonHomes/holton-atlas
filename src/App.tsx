@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { resolveCountyParcel, resolveOhioAddress } from './services/ohioProperty'
 import type { LocatedProperty, ParcelFeature } from './services/ohioProperty'
-import { getPropertyIntelligence } from './services/propertyIntelligence'
+import { getParcelIntelligence, getPropertyIntelligence, mergeParcelIntelligence } from './services/propertyIntelligence'
 import type { PropertyIntelligence } from './services/propertyIntelligence'
 import { getCountyPropertyRecord } from './services/countyRecords'
 import type { CountyPropertyRecord } from './services/countyRecords'
@@ -104,23 +104,32 @@ export default function App() {
       }
 
       setLocatedProperty(property)
-      const [nextIntelligence, parcelData, nextCountyRecord, nextResearchProfile] = await Promise.all([
+      const [pointIntelligence, parcelData, nextCountyRecord, nextResearchProfile] = await Promise.all([
         getPropertyIntelligence(property.longitude, property.latitude),
         property.county ? resolveCountyParcel(property.county, property.longitude, property.latitude) : Promise.resolve(null),
         getCountyPropertyRecord(property.county, property.address).catch(() => null),
         getResearchProfile(property.address).catch(() => null),
       ])
 
-      setIntelligence(nextIntelligence)
       setCountyRecord(nextCountyRecord)
       setResearchProfile(nextResearchProfile)
+
+      let nextIntelligence = pointIntelligence
+      let parcelScreened = false
       if (parcelData?.supported && parcelData.parcel && !parcelData.error) {
         setParcel(parcelData.parcel)
         setParcelProvider(parcelData.provider ?? `${property.county} County GIS`)
+        setSearchStatus('Property found · screening the full parcel against land and environmental evidence…')
+        const parcelAnalysis = await getParcelIntelligence(parcelData.parcel)
+        nextIntelligence = mergeParcelIntelligence(pointIntelligence, parcelAnalysis)
+        parcelScreened = Boolean(parcelAnalysis)
       }
+      setIntelligence(nextIntelligence)
 
-      if (nextResearchProfile) setSearchStatus('Property found · market, property and land evidence assembled.')
-      else if (parcelData?.parcel) setSearchStatus('Property found · parcel and land evidence assembled; market research is still limited.')
+      if (nextResearchProfile && parcelScreened) setSearchStatus('Property found · market evidence and parcel-wide land screening assembled.')
+      else if (nextResearchProfile) setSearchStatus('Property found · market, property and point-level land evidence assembled.')
+      else if (parcelData?.parcel && parcelScreened) setSearchStatus('Property found · parcel-wide land screening assembled; market research is still limited.')
+      else if (parcelData?.parcel) setSearchStatus('Property found · parcel matched; some land sources still require verification.')
       else setSearchStatus('Property found · local parcel and market records are still being connected.')
     } catch (error) {
       setLocatedProperty(null)
@@ -149,7 +158,7 @@ export default function App() {
   const briefItems = useMemo(() => {
     const rows: Array<{ label: string; title: string; detail: string; tone?: string }> = []
     if (valuation) rows.push({ label: clientIntent === 'seller' ? 'Estimated market range' : 'Price context', title: `${money(valuation.rangeLow)}–${money(valuation.rangeHigh)}`, detail: `${money(valuation.estimate)} current ATLAS center · ${valuation.confidence} evidence.` })
-    if (acres) rows.push({ label: 'Land', title: `${acres.toFixed(2)} acres`, detail: parcel ? 'Recorded parcel geometry is available for map-based review.' : 'Recorded acreage is available; parcel geometry still needs verification.' })
+    if (acres) rows.push({ label: 'Land', title: `${acres.toFixed(2)} acres`, detail: intelligence?.parcelAnalysis ? 'ATLAS matched the parcel and completed parcel-wide land screening.' : parcel ? 'Recorded parcel geometry is available for map-based review.' : 'Recorded acreage is available; parcel geometry still needs verification.' })
     if (intelligence?.flood) rows.push({ label: 'Flood research', title: intelligence.flood.value, detail: intelligence.flood.detail, tone: intelligence.flood.status === 'Problem' ? 'attention' : undefined })
     if (intelligence?.wetlands) rows.push({ label: 'Wetlands research', title: intelligence.wetlands.value, detail: intelligence.wetlands.detail })
     if (zoning) rows.push({ label: 'Local rules', title: zoning, detail: 'This is a zoning reference, not approval of a proposed use.' })
@@ -253,7 +262,7 @@ export default function App() {
               <div><p className="eyebrow">{reportTitle(clientIntent).toUpperCase()}</p><h1>{locatedProperty.address}</h1><p>{searchStatus}</p></div>
               <div className="client-proof-stack">
                 <span>{locatedProperty.county ? `${locatedProperty.county} County` : 'Ohio'}</span>
-                <span>{parcel ? 'Parcel matched' : 'Address matched'}</span>
+                <span>{intelligence?.parcelAnalysis ? 'Parcel-wide screen complete' : parcel ? 'Parcel matched' : 'Address matched'}</span>
                 {valuation && <strong>{money(valuation.estimate)} <small>{clientIntent === 'seller' ? 'estimated center' : 'price context'}</small></strong>}
               </div>
             </div>
@@ -296,7 +305,7 @@ export default function App() {
                   <IntelligenceStrip intelligence={intelligence} loading={!intelligence} />
                   <div className="explore-two-up">
                     <article><span>HOME & SITE</span><strong>{livingArea ? `${bedrooms ?? '—'} bd · ${fullBaths ?? '—'} ba · ${livingArea.toLocaleString()} sf` : 'Home facts need verification'}</strong><p>{yearBuilt ? `Built ${yearBuilt}. ` : ''}{acres ? `${acres.toFixed(2)} acres. ` : ''}{zoning ? `${zoning} zoning reference.` : 'Local zoning still needs verification.'}</p></article>
-                    <article><span>PLAIN ENGLISH FIRST</span><strong>Maps explain the property. They do not approve a use.</strong><p>ATLAS keeps the technical source underneath while the first layer tells you what the evidence may mean and what is still unknown.</p></article>
+                    <article><span>{intelligence?.parcelAnalysis ? 'PARCEL-WIDE SCREEN' : 'SCREENING LEVEL'}</span><strong>{intelligence?.parcelAnalysis ? 'ATLAS checked the parcel—not only the address point.' : 'Some environmental evidence is still point-level.'}</strong><p>{intelligence?.parcelAnalysis ? 'Flood, wetlands and soil findings now reflect intersections with the recorded parcel geometry. Terrain remains screening-level until parcel-wide slope sampling is added.' : 'ATLAS keeps the technical source underneath while showing exactly where the current evidence stops.'}</p></article>
                   </div>
                   <details className="possibilities-drawer"><summary><span>IMAGINE THE POSSIBILITIES</span><strong>Could this property fit what I want to do?</strong><small>Open the concept planner</small></summary><PlanConfigurator property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} intelligence={intelligence} acres={acres} zoningKnown={Boolean(zoning)} /></details>
                 </div>
