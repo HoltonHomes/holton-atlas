@@ -52,14 +52,21 @@ export default function PropertyStudio({
           <small>{analysis ? 'Mapped land evidence is drawn from the recorded parcel.' : 'Explore the location now. Parcel placement unlocks when the boundary is available.'}</small>
         </div>
       </header>
-
       <div className="property-studio-stage">
         <div className="property-studio-map">
           <div className="studio-map-label">
             <span>INTERACTIVE LAND CANVAS</span>
             <strong>{property.address}</strong>
           </div>
-          <PropertyMap property={property} parcel={parcel} parcelVerified={parcelVerified} />
+          {plannerOpen ? (
+            <div className="studio-map-paused">
+              <span>PLANNER OPEN</span>
+              <strong>This map moved to the planner below.</strong>
+              <p>Only one live map runs at a time — close the planner to come back to the browse view.</p>
+            </div>
+          ) : (
+            <PropertyMap property={property} parcel={parcel} parcelVerified={parcelVerified} />
+          )}
         </div>
 
         <aside className="studio-intelligence-rail">
@@ -72,7 +79,6 @@ export default function PropertyStudio({
             <strong>{parcelSize ? parcelSize.toFixed(2) : '—'}</strong>
             <span>{parcelSize ? 'mapped acres' : 'parcel acres pending'}</span>
           </div>
-
           <div className="studio-slope-read">
             <div
               className={gentle == null ? 'studio-gauge pending' : 'studio-gauge'}
@@ -101,7 +107,6 @@ export default function PropertyStudio({
               <b><i style={{ width: `${Math.min(100, water?.waterbodyPercent ?? 0)}%` }} /></b>
             </div>
           </div>
-
           <button className="studio-plan-button" type="button" onClick={() => setPlannerOpen((open) => !open)} aria-expanded={plannerOpen}>
             <span>{plannerOpen ? '×' : '+'}</span>
             <div><strong>{plannerOpen ? 'Close site planner' : 'Plan on this property'}</strong><small>Place a barn, garden, pasture, pond or drive</small></div>
