@@ -18,6 +18,7 @@ import './client-room.css'
 import './components/client-decision-guide.css'
 import './client-flow.css'
 import './value-story.css'
+import './land-at-glance.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
