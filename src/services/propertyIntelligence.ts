@@ -24,6 +24,18 @@ type ParcelFeatureQueryResponse = {
   flood: ParcelFeatureQuery | null
   wetlands: ParcelFeatureQuery | null
   soils: ParcelFeatureQuery | null
+  water: null | {
+    source: string
+    streamCount: number | null
+    waterbodies: ParcelFeatureQuery | null
+  }
+  slope: null | {
+    source: string
+    sampleCount: number
+    under5Percent: number
+    fiveTo10Percent: number
+    over10Percent: number
+  }
   unavailable: string[]
   limitation: string
   error?: string
@@ -76,6 +88,20 @@ export type ParcelAnalysis = {
     coveredPercent: number
     dominantUnit: ParcelSoilUnit | null
     units: ParcelSoilUnit[]
+  }
+  water: null | {
+    source: string
+    intersectingWaterbodies: number
+    waterbodyAcres: number
+    waterbodyPercent: number
+    streamCount: number | null
+  }
+  slope: null | {
+    source: string
+    sampleCount: number
+    under5Percent: number
+    fiveTo10Percent: number
+    over10Percent: number
   }
   unavailable: string[]
   limitation: string
@@ -257,7 +283,7 @@ function summarizeWetlands(parcel: ParcelGeometry, totalAcres: number, query: Pa
     if (acres <= 0) continue
     intersectingFeatures += 1
     mappedAcres += acres
-    const type = propertyText(row.properties, 'WETLAND_TYPE', 'WETLAND_TY', 'ATTRIBUTE')
+    const type = propertyText(row.properties, 'WETLAND_TYPE', 'Wetlands.WETLAND_TYPE', 'WETLAND_TY', 'ATTRIBUTE', 'Wetlands.ATTRIBUTE')
     if (type) types.add(type)
   }
 
@@ -313,6 +339,29 @@ function summarizeSoils(parcel: ParcelGeometry, totalAcres: number, query: Parce
     coveredPercent: rounded(percentage(coveredAcres, totalAcres), 1),
     dominantUnit: rows[0] ?? null,
     units: rows.slice(0, 12),
+  }
+}
+
+function summarizeWater(parcel: ParcelGeometry, totalAcres: number, query: ParcelFeatureQueryResponse['water']) {
+  if (!query) return null
+  const features = validOverlayFeatures(query.waterbodies)
+  let waterbodyAcres = 0
+  let intersectingWaterbodies = 0
+
+  for (const row of features) {
+    const acres = overlapAcres(parcel, row.geometry)
+    if (acres <= 0) continue
+    intersectingWaterbodies += 1
+    waterbodyAcres += acres
+  }
+
+  waterbodyAcres = Math.min(totalAcres, waterbodyAcres)
+  return {
+    source: query.source,
+    intersectingWaterbodies,
+    waterbodyAcres: rounded(waterbodyAcres),
+    waterbodyPercent: rounded(percentage(waterbodyAcres, totalAcres), 1),
+    streamCount: typeof query.streamCount === 'number' ? query.streamCount : null,
   }
 }
 
@@ -376,8 +425,8 @@ async function getWetlands(longitude: number, latitude: number): Promise<Intelli
     if (!attrs) {
       return { key: 'wetlands', label: 'Wetlands', status: 'Screened', value: 'No NWI wetland at address point', detail: 'No mapped NWI wetland polygon intersects the geocoded address point. This does not rule out wetlands elsewhere on the parcel or unmapped field conditions.', source: 'USFWS National Wetlands Inventory' }
     }
-    const wetlandType = text(attrs.WETLAND_TYPE) ?? text(attrs.WETLAND_TY) ?? text(attrs.ATTRIBUTE) ?? 'Mapped wetland'
-    const code = text(attrs.ATTRIBUTE)
+    const wetlandType = text(attrs.WETLAND_TYPE) ?? text(attrs['Wetlands.WETLAND_TYPE']) ?? text(attrs.WETLAND_TY) ?? text(attrs.ATTRIBUTE) ?? text(attrs['Wetlands.ATTRIBUTE']) ?? 'Mapped wetland'
+    const code = text(attrs.ATTRIBUTE) ?? text(attrs['Wetlands.ATTRIBUTE'])
     return { key: 'wetlands', label: 'Wetlands', status: 'Requires Verification', value: wetlandType, detail: `${code ? `NWI code ${code}. ` : ''}Mapped NWI data is a screening source, not a jurisdictional wetland determination.`, source: 'USFWS National Wetlands Inventory' }
   } catch {
     return { key: 'wetlands', label: 'Wetlands', status: 'Requires Verification', value: 'Wetlands source unavailable', detail: 'USFWS wetlands data could not be reached during this check.', source: 'USFWS NWI' }
@@ -427,8 +476,10 @@ export async function getParcelIntelligence(parcel: ParcelFeature): Promise<Parc
       flood: summarizeFlood(parcelGeometry, totalAcres, data.flood),
       wetlands: summarizeWetlands(parcelGeometry, totalAcres, data.wetlands),
       soils: summarizeSoils(parcelGeometry, totalAcres, data.soils),
+      water: summarizeWater(parcelGeometry, totalAcres, data.water),
+      slope: data.slope,
       unavailable: Array.isArray(data.unavailable) ? data.unavailable : [],
-      limitation: 'ATLAS calculated overlap acreage against the recorded GIS parcel using mapped FEMA, NWI and USDA features. GIS parcel boundaries are not surveys, and mapped environmental data does not replace field or jurisdictional determinations.',
+      limitation: 'ATLAS calculated mapped overlap and terrain distribution against the recorded GIS parcel using FEMA, NWI, USDA and USGS sources. GIS parcel boundaries are not surveys, and mapped environmental data does not replace field, engineering or jurisdictional determinations.',
     }
   } catch {
     return null
@@ -496,9 +547,10 @@ export function mergeParcelIntelligence(intelligence: PropertyIntelligence, parc
   }
 
   let soil = intelligence.soil
-  if (parcelAnalysis.soils?.dominantUnit) {
-    const result = parcelAnalysis.soils
-    const dominant = result.dominantUnit
+  const soilResult = parcelAnalysis.soils
+  const dominant = soilResult?.dominantUnit
+  if (soilResult && dominant) {
+    const result = soilResult
     const unitCount = result.units.length
     soil = {
       key: 'soil',
@@ -510,11 +562,25 @@ export function mergeParcelIntelligence(intelligence: PropertyIntelligence, parc
     }
   }
 
+  let terrain = intelligence.terrain
+  if (parcelAnalysis.slope) {
+    const result = parcelAnalysis.slope
+    terrain = {
+      key: 'terrain',
+      label: 'Terrain',
+      status: 'Screened',
+      value: `${result.under5Percent.toFixed(1)}% of parcel under 5° slope`,
+      detail: `${result.fiveTo10Percent.toFixed(1)}% sampled between 5–10° and ${result.over10Percent.toFixed(1)}% sampled over 10°, based on ${result.sampleCount} USGS 3DEP terrain samples across the parcel. Use this to guide closer review, not as an engineering-grade slope survey.`,
+      source: result.source,
+    }
+  }
+
   return {
     ...intelligence,
     flood,
     wetlands,
     soil,
+    terrain,
     parcelAnalysis,
     checkedAt: parcelAnalysis.checkedAt || intelligence.checkedAt,
   }

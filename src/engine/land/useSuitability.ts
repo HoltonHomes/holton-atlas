@@ -139,12 +139,25 @@ export function evaluateLandUse(inputs: SuitabilityInputs): SuitabilityResult {
     limitations.push('Land intelligence has not loaded, so ATLAS cannot screen mapped soil, flood, wetlands or terrain signals.')
   } else {
     if (inputs.intelligence.parcelAnalysis) {
+      const parcelAnalysis = inputs.intelligence.parcelAnalysis
       evidence.push({
         label: 'Analysis coverage',
         status: 'Known',
         value: 'Parcel-wide GIS screen completed',
-        detail: 'Where the source returned data, ATLAS intersected the recorded parcel against mapped FEMA flood, NWI wetland and USDA soil polygons. Terrain remains screening-level.',
+        detail: `ATLAS checked the parcel against mapped FEMA flood, NWI wetlands, USDA soils${parcelAnalysis.water ? ', USGS surface water' : ''}${parcelAnalysis.slope ? ' and USGS terrain samples' : ''}.`,
       })
+
+      const waterRelevant = ['Garden', 'Pasture', 'Goats', 'Orchard', 'Pond', 'Driveway'].includes(inputs.use)
+      if (waterRelevant && parcelAnalysis.water) {
+        const water = parcelAnalysis.water
+        evidence.push({
+          label: 'Surface water',
+          status: water.waterbodyPercent > 0 || (water.streamCount ?? 0) > 0 ? 'Requires Verification' : 'Screened',
+          value: water.waterbodyPercent > 0 ? `${water.waterbodyPercent.toFixed(1)}% mapped open water` : water.streamCount ? `${water.streamCount} mapped water-line intersection${water.streamCount === 1 ? '' : 's'}` : 'No mapped surface-water feature',
+          detail: `${water.waterbodyAcres.toFixed(2)} mapped open-water acres${water.streamCount != null ? ` and ${water.streamCount} stream or flowline intersection${water.streamCount === 1 ? '' : 's'}` : ''} were found across the parcel. Confirm drainage and field conditions at the intended area.`,
+          source: water.source,
+        })
+      }
     }
 
     for (const key of rule.relevant) {
@@ -158,7 +171,9 @@ export function evaluateLandUse(inputs: SuitabilityInputs): SuitabilityResult {
   }
 
   if (inputs.intelligence?.parcelAnalysis) {
-    limitations.push('Flood, wetland and soil findings use parcel-wide GIS intersections where those public layers returned successfully; terrain/elevation remains screening-level until parcel-wide slope sampling is added.')
+    limitations.push(inputs.intelligence.parcelAnalysis.slope
+      ? 'Flood, wetland, soil, surface-water and slope findings use parcel-wide mapped screening where those public sources returned successfully.'
+      : 'Flood, wetland and soil findings use parcel-wide GIS intersections where those public layers returned successfully; parcel-wide terrain sampling was unavailable for this run.')
   } else {
     limitations.push('Current environmental findings may be point-based rather than full-parcel intersections.')
   }

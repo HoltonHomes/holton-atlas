@@ -38,7 +38,7 @@ const BASEMAPS: Record<BaseMapMode, { tile: string; attribution: string; maxZoom
   Topographic: {
     tile: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Topographic map © Esri and contributors',
-    maxZoom: 16,
+    maxZoom: 19,
   },
 }
 
@@ -164,9 +164,8 @@ export default function PropertyMap({
     map.on('error', (event) => {
       const sourceId = (event as { sourceId?: string }).sourceId
       const failed = overlayNames.find((name) => sourceId === `${overlayId(name)}-source`)
-      const status = Number((event as { error?: { status?: number } }).error?.status)
       if (failed) {
-        if (status >= 400) setLayerStatus((current) => ({ ...current, [failed]: 'error' }))
+        setLayerStatus((current) => ({ ...current, [failed]: 'error' }))
         return
       }
       setMapStatus('A map layer could not load')
@@ -174,7 +173,20 @@ export default function PropertyMap({
 
     map.on('sourcedata', (event) => {
       const loaded = overlayNames.find((name) => event.sourceId === `${overlayId(name)}-source`)
-      if (loaded) setLayerStatus((current) => ({ ...current, [loaded]: 'visible' }))
+      if (loaded && event.isSourceLoaded) setLayerStatus((current) => ({ ...current, [loaded]: 'visible' }))
+    })
+
+    map.on('idle', () => {
+      const settled = overlayNames.filter((name) => map.getLayer(overlayId(name)) && map.getSource(`${overlayId(name)}-source`))
+      if (settled.length) {
+        setLayerStatus((current) => {
+          const next = { ...current }
+          settled.forEach((name) => {
+            if (next[name] !== 'error') next[name] = 'visible'
+          })
+          return next
+        })
+      }
     })
 
     map.on('click', (event) => {
@@ -229,7 +241,7 @@ export default function PropertyMap({
   useEffect(() => {
     if (planningMode) return
     const map = mapRef.current
-    if (!map || !map.isStyleLoaded()) return
+    if (!map) return
     syncOverlays(map, activeOverlays)
   }, [activeOverlays, planningMode])
 
@@ -337,6 +349,7 @@ export default function PropertyMap({
         setLayerStatus((current) => ({ ...current, [name]: 'loading' }))
         if (!map.getSource(sourceId)) map.addSource(sourceId, { type: 'raster', tiles: [definition.tile], tileSize: 256, minzoom: 6, maxzoom: 19 })
         map.addLayer({ id, type: 'raster', source: sourceId, paint: { 'raster-opacity': definition.opacity, 'raster-fade-duration': 0 } })
+        setLayerStatus((current) => ({ ...current, [name]: 'visible' }))
       }
 
       if (!shouldShow && exists) {

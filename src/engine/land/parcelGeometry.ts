@@ -1,15 +1,12 @@
-import area from '@turf/area'
-import bbox from '@turf/bbox'
-import booleanIntersects from '@turf/boolean-intersects'
-import intersect from '@turf/intersect'
-import { feature, featureCollection } from '@turf/helpers'
-import type { Feature, Geometry, Polygon, MultiPolygon } from 'geojson'
+import { area, bbox, booleanIntersects, feature, featureCollection, intersect } from '@turf/turf'
 
 const SQ_METERS_PER_ACRE = 4046.8564224
 
-export type ParcelGeometry = Polygon | MultiPolygon
+export type ParcelGeometry =
+  | { type: 'Polygon'; coordinates: number[][][] }
+  | { type: 'MultiPolygon'; coordinates: number[][][][] }
 
-export function toFeature(geometry: ParcelGeometry): Feature<ParcelGeometry> {
+export function toFeature(geometry: ParcelGeometry) {
   return feature(geometry)
 }
 
@@ -36,6 +33,6 @@ export function overlapPercent(parcel: ParcelGeometry, overlay: ParcelGeometry):
   return Math.min(100, Math.max(0, (overlapAcres(parcel, overlay) / total) * 100))
 }
 
-export function isParcelGeometry(value: Geometry | null | undefined): value is ParcelGeometry {
+export function isParcelGeometry(value: { type?: string } | null | undefined): value is ParcelGeometry {
   return value?.type === 'Polygon' || value?.type === 'MultiPolygon'
 }
