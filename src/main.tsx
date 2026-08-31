@@ -17,6 +17,7 @@ import './tax-safety.css'
 import './client-room.css'
 import './components/client-decision-guide.css'
 import './client-flow.css'
+import './value-story.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
