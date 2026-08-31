@@ -113,7 +113,7 @@ export function evaluateLandUse(inputs: SuitabilityInputs): SuitabilityResult {
   const limitations: string[] = []
 
   if (inputs.parcelVerified) {
-    evidence.push({ label: 'Parcel', status: 'Known', value: 'Parcel geometry available', detail: 'ATLAS has a parcel boundary to use as the planning frame.' })
+    evidence.push({ label: 'Parcel', status: 'Known', value: 'Parcel geometry available', detail: 'ATLAS has a recorded GIS parcel boundary to use as the planning frame. It is not a survey.' })
   } else {
     evidence.push({ label: 'Parcel', status: 'Unknown', value: 'Parcel geometry not verified', detail: 'ATLAS cannot reliably judge placement against the property boundary yet.' })
     verifyNext.unshift('Verify the official parcel boundary')
@@ -138,8 +138,17 @@ export function evaluateLandUse(inputs: SuitabilityInputs): SuitabilityResult {
   if (!inputs.intelligence) {
     limitations.push('Land intelligence has not loaded, so ATLAS cannot screen mapped soil, flood, wetlands or terrain signals.')
   } else {
+    if (inputs.intelligence.parcelAnalysis) {
+      evidence.push({
+        label: 'Analysis coverage',
+        status: 'Known',
+        value: 'Parcel-wide GIS screen completed',
+        detail: 'Where the source returned data, ATLAS intersected the recorded parcel against mapped FEMA flood, NWI wetland and USDA soil polygons. Terrain remains screening-level.',
+      })
+    }
+
     for (const key of rule.relevant) {
-      if (key === 'checkedAt') continue
+      if (key === 'checkedAt' || key === 'parcelAnalysis') continue
       const finding = inputs.intelligence[key]
       if (!finding || typeof finding === 'string') continue
       evidence.push(evidenceFromFinding(finding))
@@ -148,7 +157,12 @@ export function evaluateLandUse(inputs: SuitabilityInputs): SuitabilityResult {
     }
   }
 
-  limitations.push('Current environmental findings are screening-level and may be point-based rather than full-parcel intersections.')
+  if (inputs.intelligence?.parcelAnalysis) {
+    limitations.push('Flood, wetland and soil findings use parcel-wide GIS intersections where those public layers returned successfully; terrain/elevation remains screening-level until parcel-wide slope sampling is added.')
+  } else {
+    limitations.push('Current environmental findings may be point-based rather than full-parcel intersections.')
+  }
+  limitations.push('Mapped layers can overlap one another; ATLAS does not subtract them from acreage and call the remainder “usable land.”')
   limitations.push('ATLAS does not yet know exact septic, well, easement, utility, setback or building-envelope locations unless separately verified.')
 
   const unknownCount = evidence.filter((item) => item.status === 'Unknown' || item.status === 'Requires Verification').length
