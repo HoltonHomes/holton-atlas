@@ -1,8 +1,32 @@
 import type { ParcelFeature } from './ohioProperty'
+import { isParcelGeometry, overlapAcres, parcelAcres as calculateParcelAcres } from '../engine/land/parcelGeometry'
+import type { ParcelGeometry } from '../engine/land/parcelGeometry'
 
 type ArcFeature = {
   attributes?: Record<string, unknown>
   geometry?: { rings?: number[][][] }
+}
+
+type ParcelOverlayFeature = {
+  type: 'Feature'
+  properties: Record<string, unknown>
+  geometry: ParcelGeometry
+}
+
+type ParcelFeatureQuery = {
+  source: string
+  features: ParcelOverlayFeature[]
+}
+
+type ParcelFeatureQueryResponse = {
+  checkedAt: string
+  analysisLevel: 'parcel-feature-query'
+  flood: ParcelFeatureQuery | null
+  wetlands: ParcelFeatureQuery | null
+  soils: ParcelFeatureQuery | null
+  unavailable: string[]
+  limitation: string
+  error?: string
 }
 
 export type IntelligenceStatus = 'Verified' | 'Screened' | 'Likely' | 'Requires Verification' | 'Problem'
@@ -150,6 +174,148 @@ function text(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
+function propertyValue(properties: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const direct = properties[key]
+    if (direct !== undefined && direct !== null && direct !== '') return direct
+    const matchedKey = Object.keys(properties).find((candidate) => candidate.toLowerCase() === key.toLowerCase())
+    if (matchedKey) {
+      const value = properties[matchedKey]
+      if (value !== undefined && value !== null && value !== '') return value
+    }
+  }
+  return null
+}
+
+function propertyText(properties: Record<string, unknown>, ...keys: string[]) {
+  const value = propertyValue(properties, ...keys)
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (value !== null && value !== undefined) return String(value)
+  return null
+}
+
+function rounded(value: number, digits = 2) {
+  const factor = 10 ** digits
+  return Math.round(value * factor) / factor
+}
+
+function percentage(acres: number, totalAcres: number) {
+  if (!Number.isFinite(totalAcres) || totalAcres <= 0) return 0
+  return Math.min(100, Math.max(0, acres / totalAcres * 100))
+}
+
+function validOverlayFeatures(query: ParcelFeatureQuery | null | undefined) {
+  if (!query?.features?.length) return []
+  return query.features.filter((row) => row?.type === 'Feature' && isParcelGeometry(row.geometry))
+}
+
+function summarizeFlood(parcel: ParcelGeometry, totalAcres: number, query: ParcelFeatureQuery | null) {
+  if (!query) return null
+  const features = validOverlayFeatures(query)
+  let mappedAcres = 0
+  let sfhaAcres = 0
+  let intersectingFeatures = 0
+  const zones = new Set<string>()
+
+  for (const row of features) {
+    const acres = overlapAcres(parcel, row.geometry)
+    if (acres <= 0) continue
+    intersectingFeatures += 1
+    mappedAcres += acres
+
+    const zone = propertyText(row.properties, 'FLD_ZONE')
+    const subtype = propertyText(row.properties, 'ZONE_SUBTY')
+    if (zone) zones.add(subtype ? `${zone} · ${subtype}` : zone)
+
+    const sfha = propertyText(row.properties, 'SFHA_TF')?.toUpperCase()
+    if (sfha === 'T' || sfha === 'TRUE' || sfha === 'Y' || sfha === 'YES') sfhaAcres += acres
+  }
+
+  mappedAcres = Math.min(totalAcres, mappedAcres)
+  sfhaAcres = Math.min(totalAcres, sfhaAcres)
+
+  return {
+    source: query.source,
+    intersectingFeatures,
+    mappedAcres: rounded(mappedAcres),
+    mappedPercent: rounded(percentage(mappedAcres, totalAcres), 1),
+    sfhaAcres: rounded(sfhaAcres),
+    sfhaPercent: rounded(percentage(sfhaAcres, totalAcres), 1),
+    zones: [...zones].slice(0, 8),
+  }
+}
+
+function summarizeWetlands(parcel: ParcelGeometry, totalAcres: number, query: ParcelFeatureQuery | null) {
+  if (!query) return null
+  const features = validOverlayFeatures(query)
+  let mappedAcres = 0
+  let intersectingFeatures = 0
+  const types = new Set<string>()
+
+  for (const row of features) {
+    const acres = overlapAcres(parcel, row.geometry)
+    if (acres <= 0) continue
+    intersectingFeatures += 1
+    mappedAcres += acres
+    const type = propertyText(row.properties, 'WETLAND_TYPE', 'WETLAND_TY', 'ATTRIBUTE')
+    if (type) types.add(type)
+  }
+
+  mappedAcres = Math.min(totalAcres, mappedAcres)
+  return {
+    source: query.source,
+    intersectingFeatures,
+    mappedAcres: rounded(mappedAcres),
+    mappedPercent: rounded(percentage(mappedAcres, totalAcres), 1),
+    types: [...types].slice(0, 8),
+  }
+}
+
+function summarizeSoils(parcel: ParcelGeometry, totalAcres: number, query: ParcelFeatureQuery | null) {
+  if (!query) return null
+  const features = validOverlayFeatures(query)
+  const units = new Map<string, Omit<ParcelSoilUnit, 'percent'>>()
+  let intersectingFeatures = 0
+
+  for (const row of features) {
+    const acres = overlapAcres(parcel, row.geometry)
+    if (acres <= 0) continue
+    intersectingFeatures += 1
+
+    const name = propertyText(row.properties, 'muname', 'MUNAME') ?? 'Mapped soil unit'
+    const symbol = propertyText(row.properties, 'musym', 'MUSYM')
+    const farmland = propertyText(row.properties, 'farmlndcl', 'FARMLNDCL')
+    const capability = propertyText(row.properties, 'nirrcapcl', 'NIRRCAPCL')
+    const key = `${symbol ?? ''}|${name}`
+    const existing = units.get(key)
+    units.set(key, {
+      name,
+      symbol,
+      farmland,
+      capability,
+      acres: (existing?.acres ?? 0) + acres,
+    })
+  }
+
+  const rows: ParcelSoilUnit[] = [...units.values()]
+    .map((unit) => ({
+      ...unit,
+      acres: rounded(unit.acres),
+      percent: rounded(percentage(unit.acres, totalAcres), 1),
+    }))
+    .sort((a, b) => b.acres - a.acres)
+
+  const coveredAcres = Math.min(totalAcres, rows.reduce((sum, row) => sum + row.acres, 0))
+  return {
+    source: query.source,
+    intersectingFeatures,
+    coveredAcres: rounded(coveredAcres),
+    coveredPercent: rounded(percentage(coveredAcres, totalAcres), 1),
+    dominantUnit: rows[0] ?? null,
+    units: rows.slice(0, 12),
+  }
+}
+
 async function getSoil(longitude: number, latitude: number): Promise<IntelligenceFinding> {
   try {
     const attrs = await queryPoint(
@@ -237,16 +403,33 @@ async function getTerrain(longitude: number, latitude: number): Promise<Intellig
 }
 
 export async function getParcelIntelligence(parcel: ParcelFeature): Promise<ParcelAnalysis | null> {
+  if (!isParcelGeometry(parcel.geometry)) return null
+  const parcelGeometry = parcel.geometry as ParcelGeometry
+
   try {
     const response = await fetch('/api/parcel-analysis', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ geometry: parcel.geometry }),
+      body: JSON.stringify({ geometry: parcelGeometry }),
     })
     if (!response.ok) return null
-    const data = await response.json() as ParcelAnalysis & { error?: string }
-    if (data.error || data.analysisLevel !== 'parcel-intersection') return null
-    return data
+
+    const data = await response.json() as ParcelFeatureQueryResponse
+    if (data.error || data.analysisLevel !== 'parcel-feature-query') return null
+
+    const totalAcres = calculateParcelAcres(parcelGeometry)
+    if (!Number.isFinite(totalAcres) || totalAcres <= 0) return null
+
+    return {
+      checkedAt: data.checkedAt,
+      parcelAcres: rounded(totalAcres),
+      analysisLevel: 'parcel-intersection',
+      flood: summarizeFlood(parcelGeometry, totalAcres, data.flood),
+      wetlands: summarizeWetlands(parcelGeometry, totalAcres, data.wetlands),
+      soils: summarizeSoils(parcelGeometry, totalAcres, data.soils),
+      unavailable: Array.isArray(data.unavailable) ? data.unavailable : [],
+      limitation: 'ATLAS calculated overlap acreage against the recorded GIS parcel using mapped FEMA, NWI and USDA features. GIS parcel boundaries are not surveys, and mapped environmental data does not replace field or jurisdictional determinations.',
+    }
   } catch {
     return null
   }
