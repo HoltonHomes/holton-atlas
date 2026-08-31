@@ -6,18 +6,22 @@ import { INTELLIGENCE_OVERLAYS } from '../services/propertyIntelligence'
 import AtlasWorld from './world/AtlasWorld'
 
 export type BaseMapMode = 'Aerial' | 'Terrain' | 'Topographic'
+export type PlannerName = 'Barn' | 'Garden' | 'Poultry' | 'Pasture' | 'Goats' | 'Orchard' | 'Pond' | 'Driveway'
+export type PlanSummary = { count: number; estimatedAcres: number; byType: Partial<Record<PlannerName, number>> }
 
-const PLANNER_ITEMS = [
-  { name: 'Barn', icon: '🏠', color: '#cb5b79', overlays: ['Flood', 'Wetlands'] },
-  { name: 'Garden', icon: '🥕', color: '#668c58', overlays: ['Soils', 'Water'] },
-  { name: 'Coop', icon: '🐓', color: '#bb7335', overlays: ['Flood'] },
-  { name: 'Pasture', icon: '🌾', color: '#739658', overlays: ['Soils', 'Water'] },
-  { name: 'Drive', icon: '↗', color: '#52687b', overlays: ['Water'] },
-  { name: 'Pond', icon: '≈', color: '#367e9c', overlays: ['Water', 'Wetlands'] },
-] as const
-
-type PlannerName = typeof PLANNER_ITEMS[number]['name']
+type PlannerItem = { name: PlannerName; icon: string; color: string; overlays: string[]; acres: number }
 type PlannerPlacement = { id: number; name: PlannerName; longitude: number; latitude: number }
+
+const PLANNER_ITEMS: PlannerItem[] = [
+  { name: 'Barn', icon: '⌂', color: '#d95f82', overlays: ['Flood', 'Wetlands'], acres: 0.08 },
+  { name: 'Garden', icon: '◫', color: '#94647a', overlays: ['Soils', 'Water'], acres: 0.10 },
+  { name: 'Poultry', icon: '◉', color: '#b46a85', overlays: ['Flood'], acres: 0.03 },
+  { name: 'Pasture', icon: '▱', color: '#766779', overlays: ['Soils', 'Water'], acres: 0.50 },
+  { name: 'Goats', icon: '◇', color: '#8b6176', overlays: ['Soils', 'Water', 'Flood'], acres: 0.25 },
+  { name: 'Orchard', icon: '♢', color: '#ad6984', overlays: ['Soils', 'Water'], acres: 0.20 },
+  { name: 'Pond', icon: '≈', color: '#526b86', overlays: ['Water', 'Wetlands'], acres: 0.15 },
+  { name: 'Driveway', icon: '↗', color: '#586576', overlays: ['Water'], acres: 0.06 },
+]
 
 const BASEMAPS: Record<BaseMapMode, { tile: string; attribution: string; maxZoom: number }> = {
   Aerial: {
@@ -42,19 +46,19 @@ function styleFor(mode: BaseMapMode): StyleSpecification {
   const style: StyleSpecification = {
     version: 8,
     sources: {
-      'atlas-base': {
-        type: 'raster',
-        tiles: [base.tile],
-        tileSize: 256,
-        attribution: base.attribution,
-        maxzoom: base.maxZoom,
-      },
+      'atlas-base': { type: 'raster', tiles: [base.tile], tileSize: 256, attribution: base.attribution, maxzoom: base.maxZoom },
     },
     layers: [{ id: 'atlas-base-layer', type: 'raster', source: 'atlas-base' }],
   }
   if (mode === 'Terrain') {
-    const demSource = { type: 'raster-dem', tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 15, attribution: 'Elevation © Mapzen / AWS Terrain Tiles' }
-    ;(style.sources as Record<string, any>)['atlas-terrain-dem'] = { ...demSource }
+    ;(style.sources as Record<string, unknown>)['atlas-terrain-dem'] = {
+      type: 'raster-dem',
+      tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+      encoding: 'terrarium',
+      tileSize: 256,
+      maxzoom: 15,
+      attribution: 'Elevation © Mapzen / AWS Terrain Tiles',
+    }
   }
   return style
 }
@@ -77,11 +81,17 @@ export default function PropertyMap({
   parcel,
   parcelVerified,
   compact = false,
+  planningMode = false,
+  planningTool,
+  onPlanChange,
 }: {
   property: LocatedProperty
   parcel: ParcelFeature | null
   parcelVerified: boolean
   compact?: boolean
+  planningMode?: boolean
+  planningTool?: PlannerName
+  onPlanChange?: (summary: PlanSummary) => void
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
@@ -91,65 +101,73 @@ export default function PropertyMap({
   const [activeOverlays, setActiveOverlays] = useState<string[]>([])
   const [mapStatus, setMapStatus] = useState('Map ready')
   const [layerStatus, setLayerStatus] = useState<Record<string, 'loading' | 'visible' | 'error'>>({})
-  const [plannerOpen, setPlannerOpen] = useState(false)
-  const [plannerTool, setPlannerTool] = useState<PlannerName>('Barn')
+  const [plannerOpen, setPlannerOpen] = useState(planningMode)
+  const [plannerTool, setPlannerTool] = useState<PlannerName>(planningTool ?? 'Barn')
   const [placements, setPlacements] = useState<PlannerPlacement[]>([])
   const [worldOpen, setWorldOpen] = useState(false)
   const baseMapRef = useRef<BaseMapMode>(baseMap)
-  const plannerOpenRef = useRef(plannerOpen)
+  const plannerOpenRef = useRef(plannerOpen || planningMode)
   const plannerToolRef = useRef<PlannerName>(plannerTool)
   baseMapRef.current = baseMap
-  plannerOpenRef.current = plannerOpen
+  plannerOpenRef.current = plannerOpen || planningMode
   plannerToolRef.current = plannerTool
 
   const overlayNames = useMemo(() => ['Soils', 'Water', 'Flood', 'Wetlands'], [])
 
   useEffect(() => {
+    if (planningTool) setPlannerTool(planningTool)
+  }, [planningTool])
+
+  useEffect(() => {
+    if (planningMode) {
+      setPlannerOpen(true)
+      setWorldOpen(false)
+      setBaseMap('Aerial')
+    }
+  }, [planningMode])
+
+  useEffect(() => {
     if (!containerRef.current) return
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: styleFor(baseMap),
+      style: styleFor('Aerial'),
       center: [property.longitude, property.latitude],
       zoom: 17,
       attributionControl: {},
       maxZoom: 20,
       maxPitch: 80,
     })
-    map.addControl(new NavigationControl({ showCompass: false }), 'top-right')
+    map.addControl(new NavigationControl({ showCompass: !planningMode }), 'top-right')
     mapRef.current = map
-    markerRef.current = new Marker({ color: '#d95f82' })
-      .setLngLat([property.longitude, property.latitude])
-      .addTo(map)
+    if (!planningMode) {
+      markerRef.current = new Marker({ color: '#d95f82' }).setLngLat([property.longitude, property.latitude]).addTo(map)
+    }
 
     map.on('load', () => {
-      setMapStatus(`${baseMapRef.current} loaded`)
+      setMapStatus('Aerial loaded')
       drawParcel(map, parcel)
-      syncOverlays(map, activeOverlays)
     })
 
     map.on('error', (event) => {
-      const sourceId = (event as any).sourceId as string | undefined
+      const sourceId = (event as { sourceId?: string }).sourceId
       const failed = overlayNames.find((name) => sourceId === `${overlayId(name)}-source`)
-      const status = Number((event as any).error?.status)
+      const status = Number((event as { error?: { status?: number } }).error?.status)
       if (failed) {
         if (status >= 400) setLayerStatus((current) => ({ ...current, [failed]: 'error' }))
         return
       }
       setMapStatus('A map layer could not load')
     })
+
     map.on('sourcedata', (event) => {
       const loaded = overlayNames.find((name) => event.sourceId === `${overlayId(name)}-source`)
       if (loaded) setLayerStatus((current) => ({ ...current, [loaded]: 'visible' }))
     })
+
     map.on('click', (event) => {
       if (!plannerOpenRef.current) return
       const tool = plannerToolRef.current
-      setPlacements((current) => [...current, {
-        id: Date.now() + current.length,
-        name: tool,
-        longitude: event.lngLat.lng,
-        latitude: event.lngLat.lat,
-      }])
+      setPlacements((current) => [...current, { id: Date.now() + current.length, name: tool, longitude: event.lngLat.lng, latitude: event.lngLat.lat }])
     })
 
     return () => {
@@ -160,28 +178,24 @@ export default function PropertyMap({
       map.remove()
       mapRef.current = null
     }
-    // Map is intentionally initialized once per property.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [property.latitude, property.longitude])
+  }, [property.latitude, property.longitude, planningMode])
 
   useEffect(() => {
+    if (planningMode) return
     const map = mapRef.current
     if (!map) return
     setMapStatus(`Loading ${baseMap}…`)
     map.once('style.load', () => {
-      if (baseMap === 'Terrain') {
-        map.setTerrain({ source: 'atlas-terrain-dem', exaggeration: 1.55 })
-      }
+      if (baseMap === 'Terrain') map.setTerrain({ source: 'atlas-terrain-dem', exaggeration: 1.55 })
       drawParcel(map, parcel)
       syncOverlays(map, activeOverlays)
       setMapStatus(`${baseMap} loaded`)
-      map.once('idle', () => {
-        map.easeTo({ pitch: baseMap === 'Terrain' ? 62 : 0, bearing: baseMap === 'Terrain' ? -18 : 0, duration: 900 })
-      })
+      map.once('idle', () => map.easeTo({ pitch: baseMap === 'Terrain' ? 62 : 0, bearing: baseMap === 'Terrain' ? -18 : 0, duration: 900 }))
     })
     map.setStyle(styleFor(baseMap))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseMap])
+  }, [baseMap, planningMode])
 
   useEffect(() => {
     const map = mapRef.current
@@ -190,10 +204,11 @@ export default function PropertyMap({
   }, [parcel])
 
   useEffect(() => {
+    if (planningMode) return
     const map = mapRef.current
     if (!map || !map.isStyleLoaded()) return
     syncOverlays(map, activeOverlays)
-  }, [activeOverlays])
+  }, [activeOverlays, planningMode])
 
   useEffect(() => {
     const map = mapRef.current
@@ -203,15 +218,14 @@ export default function PropertyMap({
       drawParcel(map, parcel)
     })
     return () => window.cancelAnimationFrame(frame)
-    // The same map moves between the compact overview and full land workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [compact])
+  }, [compact, planningMode])
 
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    map.getCanvas().style.cursor = plannerOpen ? 'crosshair' : ''
-  }, [plannerOpen])
+    map.getCanvas().style.cursor = plannerOpenRef.current ? 'crosshair' : ''
+  }, [plannerOpen, planningMode])
 
   useEffect(() => {
     const map = mapRef.current
@@ -231,24 +245,31 @@ export default function PropertyMap({
       }
       const item = PLANNER_ITEMS.find((candidate) => candidate.name === placement.name)!
       const element = document.createElement('button')
-      element.className = 'atlas-plan-marker'
+      element.className = planningMode ? 'atlas-plan-marker configurator-marker' : 'atlas-plan-marker'
       element.style.setProperty('--plan-color', item.color)
       element.type = 'button'
-      element.title = `${item.name} idea · drag to move`
-      element.setAttribute('aria-label', `${item.name} idea; drag to move`)
-      element.innerHTML = `<span>${item.icon}</span><strong>${item.name}</strong>`
-      const marker = new Marker({ element, draggable: true, anchor: 'bottom' })
-        .setLngLat([placement.longitude, placement.latitude])
-        .addTo(map)
+      element.title = `${item.name} concept · drag to move`
+      element.setAttribute('aria-label', `${item.name} concept; drag to move`)
+      element.innerHTML = `<span>${item.icon}</span><strong>${item.name}</strong><small>${item.acres.toFixed(2)} ac</small>`
+      const marker = new Marker({ element, draggable: true, anchor: 'bottom' }).setLngLat([placement.longitude, placement.latitude]).addTo(map)
       marker.on('dragend', () => {
         const location = marker.getLngLat()
-        setPlacements((current) => current.map((candidate) => candidate.id === placement.id
-          ? { ...candidate, longitude: location.lng, latitude: location.lat }
-          : candidate))
+        setPlacements((current) => current.map((candidate) => candidate.id === placement.id ? { ...candidate, longitude: location.lng, latitude: location.lat } : candidate))
       })
       planningMarkersRef.current.set(placement.id, marker)
     })
-  }, [placements])
+  }, [placements, planningMode])
+
+  useEffect(() => {
+    if (!onPlanChange) return
+    const byType: Partial<Record<PlannerName, number>> = {}
+    let estimatedAcres = 0
+    placements.forEach((placement) => {
+      byType[placement.name] = (byType[placement.name] ?? 0) + 1
+      estimatedAcres += PLANNER_ITEMS.find((item) => item.name === placement.name)?.acres ?? 0
+    })
+    onPlanChange({ count: placements.length, estimatedAcres, byType })
+  }, [placements, onPlanChange])
 
   function drawParcel(map: MapLibreMap, nextParcel: ParcelFeature | null) {
     if (!nextParcel) return
@@ -257,13 +278,23 @@ export default function PropertyMap({
     if (source) source.setData(feature)
     else {
       map.addSource('atlas-parcel', { type: 'geojson', data: feature })
-      map.addLayer({ id: 'atlas-parcel-fill', type: 'fill', source: 'atlas-parcel', paint: { 'fill-color': '#d95f82', 'fill-opacity': 0.12 } })
-      map.addLayer({ id: 'atlas-parcel-line', type: 'line', source: 'atlas-parcel', paint: { 'line-color': '#d95f82', 'line-width': 4 } })
+      map.addLayer({
+        id: 'atlas-parcel-fill',
+        type: 'fill',
+        source: 'atlas-parcel',
+        paint: { 'fill-color': planningMode ? '#fff8ef' : '#d95f82', 'fill-opacity': planningMode ? 0.08 : 0.12 },
+      })
+      map.addLayer({
+        id: 'atlas-parcel-line',
+        type: 'line',
+        source: 'atlas-parcel',
+        paint: { 'line-color': planningMode ? '#ffffff' : '#d95f82', 'line-width': planningMode ? 3 : 4, 'line-opacity': planningMode ? 0.92 : 1 },
+      })
     }
 
     const bounds = new LngLatBounds()
     extendBounds(bounds, (nextParcel.geometry as { coordinates?: unknown }).coordinates)
-    if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: compact ? 28 : 48, maxZoom: 18.5, duration: 650 })
+    if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: planningMode ? 64 : compact ? 28 : 48, maxZoom: 18.5, duration: 650 })
   }
 
   function syncOverlays(map: MapLibreMap, overlays: string[]) {
@@ -276,9 +307,7 @@ export default function PropertyMap({
 
       if (shouldShow && !exists) {
         setLayerStatus((current) => ({ ...current, [name]: 'loading' }))
-        if (!map.getSource(sourceId)) {
-          map.addSource(sourceId, { type: 'raster', tiles: [definition.tile], tileSize: 256, minzoom: 6, maxzoom: 19 })
-        }
+        if (!map.getSource(sourceId)) map.addSource(sourceId, { type: 'raster', tiles: [definition.tile], tileSize: 256, minzoom: 6, maxzoom: 19 })
         map.addLayer({ id, type: 'raster', source: sourceId, paint: { 'raster-opacity': definition.opacity, 'raster-fade-duration': 0 } })
       }
 
@@ -292,7 +321,6 @@ export default function PropertyMap({
         })
       }
     })
-
     if (map.getLayer('atlas-parcel-fill')) map.moveLayer('atlas-parcel-fill')
     if (map.getLayer('atlas-parcel-line')) map.moveLayer('atlas-parcel-line')
   }
@@ -313,50 +341,66 @@ export default function PropertyMap({
   }
 
   return (
-    <section className={compact ? 'atlas-map-shell compact-map' : 'atlas-map-shell'}>
-      {worldOpen && <AtlasWorld property={property} parcel={parcel} parcelVerified={parcelVerified} onClose={() => setWorldOpen(false)} />}
-      <div className="atlas-map-toolbar">
-        <div className="basemap-switch" aria-label="Base map">
-          <button className={worldOpen ? 'world-mode active' : 'world-mode'} onClick={openWorld}>World</button>
-          {(['Aerial', 'Terrain', 'Topographic'] as BaseMapMode[]).map((mode) => (
-            <button key={mode} className={!worldOpen && baseMap === mode ? 'active' : ''} onClick={() => { setWorldOpen(false); setBaseMap(mode) }}>{mode === 'Terrain' ? '3D Terrain' : mode}</button>
-          ))}
-        </div>
-        <div className="overlay-switch" aria-label="Map overlays">
-          {overlayNames.map((name) => (
-            <button key={name} className={activeOverlays.includes(name) ? `active ${layerStatus[name] ?? ''}` : ''} onClick={() => toggleOverlay(name)} aria-pressed={activeOverlays.includes(name)}>
-              {name}{layerStatus[name] === 'loading' ? ' ···' : layerStatus[name] === 'error' ? ' !' : ''}
-            </button>
-          ))}
-        </div>
-      </div>
-      <button className={plannerOpen ? 'site-planner-launch active' : 'site-planner-launch'} onClick={() => { setWorldOpen(false); setPlannerOpen((open) => !open) }} aria-expanded={plannerOpen}>
-        <span>+</span>{plannerOpen ? 'Close planner' : 'Plan this property'}
-      </button>
-      {plannerOpen && (
-        <aside className="site-planner-panel" aria-label="Concept site planner">
-          <div className="planner-title"><div><span>CONCEPT PLANNER</span><strong>What goes where?</strong></div><b>{placements.length}</b></div>
-          <div className="planner-item-grid">
-            {PLANNER_ITEMS.map((item) => (
-              <button key={item.name} className={plannerTool === item.name ? 'active' : ''} onClick={() => choosePlannerTool(item.name)}>
-                <span>{item.icon}</span><strong>{item.name}</strong>
+    <section className={`${compact ? 'atlas-map-shell compact-map' : 'atlas-map-shell'}${planningMode ? ' planning-map' : ''}`}>
+      {!planningMode && worldOpen && <AtlasWorld property={property} parcel={parcel} parcelVerified={parcelVerified} onClose={() => setWorldOpen(false)} />}
+
+      {!planningMode && (
+        <div className="atlas-map-toolbar">
+          <div className="basemap-switch" aria-label="Base map">
+            <button className={worldOpen ? 'world-mode active' : 'world-mode'} onClick={openWorld}>World</button>
+            {(['Aerial', 'Terrain', 'Topographic'] as BaseMapMode[]).map((mode) => (
+              <button key={mode} className={!worldOpen && baseMap === mode ? 'active' : ''} onClick={() => { setWorldOpen(false); setBaseMap(mode) }}>{mode === 'Terrain' ? '3D Terrain' : mode}</button>
+            ))}
+          </div>
+          <div className="overlay-switch" aria-label="Map overlays">
+            {overlayNames.map((name) => (
+              <button key={name} className={activeOverlays.includes(name) ? `active ${layerStatus[name] ?? ''}` : ''} onClick={() => toggleOverlay(name)} aria-pressed={activeOverlays.includes(name)}>
+                {name}{layerStatus[name] === 'loading' ? ' ···' : layerStatus[name] === 'error' ? ' !' : ''}
               </button>
             ))}
           </div>
-          <p className="planner-hint"><i />Tap the map to place · drag to move</p>
-          <div className="planner-actions">
-            <button disabled={!placements.length} onClick={() => setPlacements((current) => current.slice(0, -1))}>Undo</button>
-            <button disabled={!placements.length} onClick={() => setPlacements([])}>Clear all</button>
-          </div>
-          <small>Concept only · verify survey, setbacks, septic and permits</small>
-        </aside>
+        </div>
       )}
+
+      {!planningMode && (
+        <>
+          <button className={plannerOpen ? 'site-planner-launch active' : 'site-planner-launch'} onClick={() => { setWorldOpen(false); setPlannerOpen((open) => !open) }} aria-expanded={plannerOpen}>
+            <span>+</span>{plannerOpen ? 'Close planner' : 'Plan this property'}
+          </button>
+          {plannerOpen && (
+            <aside className="site-planner-panel" aria-label="Concept site planner">
+              <div className="planner-title"><div><span>CONCEPT PLANNER</span><strong>What goes where?</strong></div><b>{placements.length}</b></div>
+              <div className="planner-item-grid">
+                {PLANNER_ITEMS.slice(0, 6).map((item) => (
+                  <button key={item.name} className={plannerTool === item.name ? 'active' : ''} onClick={() => choosePlannerTool(item.name)}><span>{item.icon}</span><strong>{item.name}</strong></button>
+                ))}
+              </div>
+              <p className="planner-hint"><i />Tap the map to place · drag to move</p>
+              <div className="planner-actions"><button disabled={!placements.length} onClick={() => setPlacements((current) => current.slice(0, -1))}>Undo</button><button disabled={!placements.length} onClick={() => setPlacements([])}>Clear all</button></div>
+              <small>Concept only · verify survey, setbacks, septic and permits</small>
+            </aside>
+          )}
+        </>
+      )}
+
+      {planningMode && (
+        <div className="planning-map-hud">
+          <div><span>PLACING</span><strong>{plannerTool}</strong><small>Tap to add · drag to move</small></div>
+          <div className="planning-map-actions"><button disabled={!placements.length} onClick={() => setPlacements((current) => current.slice(0, -1))}>Undo</button><button disabled={!placements.length} onClick={() => setPlacements([])}>Clear</button></div>
+        </div>
+      )}
+
       <div ref={containerRef} className="atlas-map-canvas" />
-      <div className="atlas-map-foot">
-        <div><span className="mini-label">MAP VIEW</span><strong>{worldOpen ? 'ATLAS World' : baseMap === 'Terrain' ? '3D Terrain' : baseMap}{!worldOpen && activeOverlays.length ? ` + ${activeOverlays.join(' + ')}` : ''}</strong><small>{worldOpen ? 'Interactive parcel world · drag to orbit' : mapStatus}{placements.length ? ` · ${placements.length} idea${placements.length === 1 ? '' : 's'} placed` : ''}</small></div>
-        <span className={parcelVerified ? 'map-proof verified' : 'map-proof'}>{parcelVerified ? 'Parcel verified' : 'Address located'}</span>
-      </div>
-      {activeOverlays.length > 0 && !worldOpen && <div className="active-layer-legend"><strong>Layer status</strong>{activeOverlays.map((name) => <span key={name} className={layerStatus[name] ?? 'loading'}><i />{name}: {layerStatus[name] === 'visible' ? 'on map' : layerStatus[name] === 'error' ? 'unavailable' : 'loading'}</span>)}</div>}
+
+      {!planningMode && (
+        <>
+          <div className="atlas-map-foot">
+            <div><span className="mini-label">MAP VIEW</span><strong>{worldOpen ? 'ATLAS World' : baseMap === 'Terrain' ? '3D Terrain' : baseMap}{!worldOpen && activeOverlays.length ? ` + ${activeOverlays.join(' + ')}` : ''}</strong><small>{worldOpen ? 'Interactive parcel world · drag to orbit' : mapStatus}{placements.length ? ` · ${placements.length} idea${placements.length === 1 ? '' : 's'} placed` : ''}</small></div>
+            <span className={parcelVerified ? 'map-proof verified' : 'map-proof'}>{parcelVerified ? 'Parcel verified' : 'Address located'}</span>
+          </div>
+          {activeOverlays.length > 0 && !worldOpen && <div className="active-layer-legend"><strong>Layer status</strong>{activeOverlays.map((name) => <span key={name} className={layerStatus[name] ?? 'loading'}><i />{name}: {layerStatus[name] === 'visible' ? 'on map' : layerStatus[name] === 'error' ? 'unavailable' : 'loading'}</span>)}</div>}
+        </>
+      )}
     </section>
   )
 }
