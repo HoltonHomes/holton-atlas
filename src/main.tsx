@@ -8,6 +8,7 @@ import './intelligence.css'
 import './research-evidence.css'
 import './homeowner.css'
 import './owner-overrides.css'
+import './phase-two.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

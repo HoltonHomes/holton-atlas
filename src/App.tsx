@@ -24,7 +24,7 @@ import {
 import PropertyMap from './components/PropertyMap'
 import HomeownerOverview from './components/HomeownerOverview'
 
-const reportNav = ['Overview', 'Home & Value', 'Land & Maps', 'Rural Potential', 'Risks', 'Costs']
+const reportNav = ['Overview', 'Value & Equity', 'Home & Property', 'Land & Maps', 'Property Ideas', 'Risks', 'Taxes & Costs', 'Records & Sources']
 type ViewMode = 'owner' | 'buyer'
 
 function money(value: unknown) {
@@ -212,7 +212,7 @@ export default function App() {
                   zoning={zoning}
                   classificationMls={classificationMls}
                   classificationPublic={classificationPublic}
-                  onOpenValue={() => setActiveSection('Home & Value')}
+                  onOpenValue={() => setActiveSection('Value & Equity')}
                   onOpenLand={() => setActiveSection('Land & Maps')}
                   onOpenRisks={() => setActiveSection('Risks')}
                 />
@@ -229,14 +229,25 @@ export default function App() {
                 <PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} />
                 <IntelligenceStrip intelligence={intelligence} loading={!intelligence} />
                 <div className="overview-grid overview-actions buyer-overview-actions">
-                  <article className="intel-card feature-card"><span className="card-kicker">HOME</span><h3>{livingArea ? `${bedrooms ?? '—'} bd · ${fullBaths ?? '—'} ba · ${livingArea.toLocaleString()} sf` : 'Home facts pending'}</h3><p>{yearBuilt ? `Built ${yearBuilt}. ` : ''}{salePrice ? `Last recorded sale ${money(salePrice)} on ${dateLabel(saleDate)}.` : ''}</p><button onClick={() => setActiveSection('Home & Value')}>Review value →</button></article>
+                  <article className="intel-card feature-card"><span className="card-kicker">HOME</span><h3>{livingArea ? `${bedrooms ?? '—'} bd · ${fullBaths ?? '—'} ba · ${livingArea.toLocaleString()} sf` : 'Home facts pending'}</h3><p>{yearBuilt ? `Built ${yearBuilt}. ` : ''}{salePrice ? `Last recorded sale ${money(salePrice)} on ${dateLabel(saleDate)}.` : ''}</p><button onClick={() => setActiveSection('Home & Property')}>Review the home →</button></article>
                   <article className="intel-card feature-card"><span className="card-kicker">LAND</span><h3>{acres ? `${acres.toFixed(2)} acres` : 'Parcel acreage pending'}</h3><p>{intelligence ? `${intelligence.soil.value}. ${intelligence.terrain.value}.` : 'Land intelligence is loading.'}</p><button onClick={() => setActiveSection('Land & Maps')}>Open land analysis →</button></article>
                   <article className="intel-card feature-card"><span className="card-kicker">DUE DILIGENCE</span><h3>What could limit it?</h3><p>{intelligence ? `${intelligence.flood.value}. ${intelligence.wetlands.value}.` : 'Flood, wetlands, zoning, septic and access stay together.'}</p><button onClick={() => setActiveSection('Risks')}>Review risks →</button></article>
                 </div>
               </>
             )}
 
-            {activeSection === 'Home & Value' && (researchProfile ? <ResearchHomeValueSection profile={researchProfile} /> : <HomeValueSection parcelVerified={Boolean(parcel)} county={locatedProperty.county} record={countyRecord} />)}
+            {activeSection === 'Value & Equity' && (researchProfile ? <ResearchHomeValueSection profile={researchProfile} /> : <HomeValueSection parcelVerified={Boolean(parcel)} county={locatedProperty.county} record={countyRecord} />)}
+
+            {activeSection === 'Home & Property' && (
+              <div className="data-section">
+                <div className="section-heading"><div><p className="eyebrow">HOME & PROPERTY</p><h2>What is physically here?</h2></div><p>This is the practical property profile: corroborated home facts, lot size and improvements. Tax classifications and market estimates stay in their own sections.</p></div>
+                <div className="source-plan-grid purpose-grid">
+                  <article className="intel-card"><span className="card-kicker">THE HOME</span><h3>{livingArea ? `${livingArea.toLocaleString()} sq ft` : 'Needs verification'}</h3><p>{bedrooms ?? '—'} bedrooms · {fullBaths ?? '—'} full baths · built {yearBuilt ?? '—'}. Facts are promoted only when the appropriate property/MLS evidence supports them.</p></article>
+                  <article className="intel-card"><span className="card-kicker">THE LOT</span><h3>{acres ? `${acres.toFixed(2)} acres` : 'Needs verification'}</h3><p>Parcel geometry and stated acreage are separate evidence. Open Land & Maps to understand what the acreage contains.</p></article>
+                  <article className="intel-card"><span className="card-kicker">LAST TRANSFER</span><h3>{money(salePrice)}</h3><p>{dateLabel(saleDate)}. A recorded transfer is transaction evidence; it is not automatically today's market value.</p></article>
+                </div>
+              </div>
+            )}
 
             {activeSection === 'Land & Maps' && (
               <div className="data-section">
@@ -247,9 +258,18 @@ export default function App() {
               </div>
             )}
 
-            {activeSection === 'Rural Potential' && <RuralPotentialSection intelligence={intelligence} acres={acres} zoningKnown={Boolean(zoning)} />}
+            {activeSection === 'Property Ideas' && <RuralPotentialSection intelligence={intelligence} acres={acres} zoningKnown={Boolean(zoning)} />}
             {activeSection === 'Risks' && <RisksSection intelligence={intelligence} county={locatedProperty.county} parcelVerified={Boolean(parcel)} />}
-            {activeSection === 'Costs' && (researchProfile ? <ResearchCostsSection profile={researchProfile} countyRecord={countyRecord} /> : <CostsSection county={locatedProperty.county} record={countyRecord} />)}
+            {activeSection === 'Taxes & Costs' && (researchProfile ? <ResearchCostsSection profile={researchProfile} countyRecord={countyRecord} /> : <CostsSection county={locatedProperty.county} record={countyRecord} />)}
+            {activeSection === 'Records & Sources' && (
+              <div className="data-section">
+                <div className="section-heading"><div><p className="eyebrow">RECORDS & SOURCES</p><h2>The evidence room.</h2></div><p>Use this when you need to audit a number—not as the first screen a homeowner has to decode.</p></div>
+                <div className="records-grid records-page-grid">
+                  <div><span>Parcel ID</span><strong>{String(parcelId ?? 'Requires verification')}</strong></div><div><span>Zoning</span><strong>{zoning ?? 'Requires local verification'}</strong></div><div><span>County source</span><strong>{parcelProvider ?? countyRecord?.source ?? locatedProperty.source}</strong></div><div><span>County appraisal</span><strong>{money(countyRecord?.appraisedTotal)}</strong></div><div><span>Taxable assessment</span><strong>{money(countyRecord?.assessedTotal)}</strong></div><div><span>Research review</span><strong>{researchProfile ? dateLabel(researchProfile.reviewed_at) : 'No reviewed profile'}</strong></div>
+                </div>
+                {researchProfile?.sources?.length ? <div className="source-link-list">{researchProfile.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer"><span>{source.role || source.type}</span><strong>{source.name}</strong>↗</a>)}</div> : <div className="interpretation-card"><span className="card-kicker">EVIDENCE STATUS</span><h3>Local source coverage is still limited.</h3><p>ATLAS will not invent a source list. County adapters and reviewed research appear here when available.</p></div>}
+              </div>
+            )}
           </section>
 
           <footer className="report-source-foot">Property records: {parcelProvider ?? countyRecord?.source ?? locatedProperty.source}. Technical records remain available in the report without controlling the homeowner experience.</footer>

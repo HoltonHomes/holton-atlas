@@ -14,6 +14,34 @@ function pct(value: number | null) {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`
 }
 
+function ValuePositionChart({ sale, estimate, low, high }: { sale: number; estimate: number; low: number; high: number }) {
+  const min = Math.min(sale, low) * 0.96
+  const max = Math.max(sale, high) * 1.04
+  const x = (value: number) => 8 + ((value - min) / Math.max(1, max - min)) * 84
+  return (
+    <section className="owner-chart-card">
+      <div className="chart-heading"><div><span>VALUE POSITION</span><strong>Purchase to today</strong></div><small>Range shows uncertainty, not a promise.</small></div>
+      <svg viewBox="0 0 100 42" role="img" aria-label={`Purchase price ${money(sale)}, estimated value ${money(estimate)}, likely range ${money(low)} to ${money(high)}`}>
+        <line x1="8" y1="22" x2="92" y2="22" className="chart-axis" />
+        <line x1={x(low)} y1="22" x2={x(high)} y2="22" className="chart-range" />
+        <circle cx={x(sale)} cy="22" r="3.2" className="chart-sale" /><circle cx={x(estimate)} cy="22" r="4" className="chart-estimate" />
+        <text x={x(sale)} y="36" textAnchor="middle">Bought {money(sale)}</text><text x={x(estimate)} y="10" textAnchor="middle">Today {money(estimate)}</text>
+      </svg>
+    </section>
+  )
+}
+
+function EquityChart({ equity, mortgage, value }: { equity: number; mortgage: number; value: number }) {
+  const equityPct = Math.max(0, Math.min(100, (equity / value) * 100))
+  return (
+    <section className="owner-chart-card equity-visual">
+      <div className="chart-heading"><div><span>YOUR POSITION</span><strong>Estimated equity mix</strong></div><small>Based on the balance you entered.</small></div>
+      <div className="equity-bar" aria-label={`${equityPct.toFixed(0)} percent equity`}><i style={{ width: `${equityPct}%` }} /><b style={{ width: `${100 - equityPct}%` }} /></div>
+      <div className="equity-legend"><span><i className="owned" />You may own <strong>{money(equity)}</strong></span><span><i className="owed" />Loan balance <strong>{money(mortgage)}</strong></span></div>
+    </section>
+  )
+}
+
 export default function HomeownerOverview({
   researchProfile,
   intelligence,
@@ -121,6 +149,9 @@ export default function HomeownerOverview({
         <div><span>Lot</span><strong>{acres ? `${acres.toFixed(2)} acres` : '—'}</strong></div>
         <div><span>Last sale</span><strong>{salePrice ? money(salePrice) : '—'}</strong></div>
       </section>
+
+      {valuation && salePrice && <ValuePositionChart sale={salePrice} estimate={valuation.estimate} low={valuation.rangeLow} high={valuation.rangeHigh} />}
+      {valuation && hasMortgage && estimatedEquity != null && <EquityChart equity={estimatedEquity} mortgage={parsedMortgage} value={valuation.estimate} />}
 
       <section className="owner-know-section">
         <div className="section-heading compact homeowner-heading">

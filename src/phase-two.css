@@ -1,0 +1,26 @@
+.owner-chart-card { padding: 22px 24px; border: 1px solid rgba(28,43,69,.08); border-radius: 20px; background: #fff; box-shadow: 0 14px 38px rgba(28,43,69,.045); }
+.chart-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.chart-heading span { display: block; color: #d95f82; font-size: 9px; font-weight: 900; letter-spacing: .09em; }
+.chart-heading strong { display: block; margin-top: 5px; font-family: Georgia,serif; font-size: 22px; font-weight: 500; }
+.chart-heading small { color: #8b929b; font-size: 9px; }
+.owner-chart-card svg { display: block; width: 100%; height: auto; margin-top: 8px; overflow: visible; }
+.owner-chart-card svg text { fill: #68717d; font: 3.2px Arial,sans-serif; }
+.chart-axis { stroke: #e8e5e0; stroke-width: 1; }
+.chart-range { stroke: #f0a7bc; stroke-width: 5; stroke-linecap: round; opacity: .5; }
+.chart-sale { fill: #fff; stroke: #1c2b45; stroke-width: 1.4; }
+.chart-estimate { fill: #d95f82; stroke: #fff; stroke-width: 1.4; }
+.equity-bar { display: flex; height: 18px; margin: 24px 0 14px; border-radius: 999px; overflow: hidden; background: #eee; }
+.equity-bar i { background: #d95f82; }.equity-bar b { background: #1c2b45; }
+.equity-legend { display: flex; justify-content: space-between; gap: 16px; color: #69717c; font-size: 10px; }
+.equity-legend span { display: flex; align-items: center; gap: 6px; }.equity-legend i { width: 9px; height: 9px; border-radius: 50%; }
+.equity-legend i.owned { background: #d95f82; }.equity-legend i.owed { background: #1c2b45; }
+.active-layer-legend span { display: inline-flex; align-items: center; gap: 4px; }.active-layer-legend span i { width: 6px; height: 6px; border-radius: 50%; background: #f3a1ba; }
+.active-layer-legend span.visible i { background: #7ed6a6; }.active-layer-legend span.error { color: #ffd0da; }.active-layer-legend span.error i { background: #ff6f91; }
+.overlay-switch button.loading { animation: layerPulse 1.2s ease-in-out infinite; }.overlay-switch button.error { background: #8e2847; }
+@keyframes layerPulse { 50% { opacity: .62; } }
+.records-page-grid { border: 1px solid rgba(28,43,69,.07); border-radius: 18px; overflow: hidden; }
+.source-link-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-top: 18px; }
+.source-link-list a { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; padding: 17px 18px; border: 1px solid rgba(28,43,69,.08); border-radius: 14px; background: #fff; color: #1c2b45; text-decoration: none; }
+.source-link-list a span { grid-column: 1/-1; color: #d95f82; font-size: 8px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.source-link-list a strong { font-size: 12px; }.purpose-grid .intel-card { min-height: 180px; }
+@media(max-width:680px) { .source-link-list { grid-template-columns: 1fr; }.chart-heading,.equity-legend { align-items: flex-start; flex-direction: column; } }

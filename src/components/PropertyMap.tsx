@@ -68,6 +68,7 @@ export default function PropertyMap({
   const [baseMap, setBaseMap] = useState<BaseMapMode>('Aerial')
   const [activeOverlays, setActiveOverlays] = useState<string[]>([])
   const [mapStatus, setMapStatus] = useState('Map ready')
+  const [layerStatus, setLayerStatus] = useState<Record<string, 'loading' | 'visible' | 'error'>>({})
 
   const overlayNames = useMemo(() => ['Soils', 'Water', 'Flood', 'Wetlands'], [])
 
@@ -93,7 +94,20 @@ export default function PropertyMap({
       syncOverlays(map, activeOverlays)
     })
 
-    map.on('error', () => setMapStatus('A map layer could not load'))
+    map.on('error', (event) => {
+      const sourceId = (event as any).sourceId as string | undefined
+      const failed = overlayNames.find((name) => sourceId === `${overlayId(name)}-source`)
+      const status = Number((event as any).error?.status)
+      if (failed) {
+        if (status >= 400) setLayerStatus((current) => ({ ...current, [failed]: 'error' }))
+        return
+      }
+      setMapStatus('A map layer could not load')
+    })
+    map.on('sourcedata', (event) => {
+      const loaded = overlayNames.find((name) => event.sourceId === `${overlayId(name)}-source`)
+      if (loaded) setLayerStatus((current) => ({ ...current, [loaded]: 'visible' }))
+    })
 
     return () => {
       markerRef.current?.remove()
@@ -155,15 +169,21 @@ export default function PropertyMap({
       const exists = Boolean(map.getLayer(id))
 
       if (shouldShow && !exists) {
+        setLayerStatus((current) => ({ ...current, [name]: 'loading' }))
         if (!map.getSource(sourceId)) {
-          map.addSource(sourceId, { type: 'raster', tiles: [definition.tile], tileSize: 256 })
+          map.addSource(sourceId, { type: 'raster', tiles: [definition.tile], tileSize: 256, minzoom: 6, maxzoom: 19 })
         }
-        map.addLayer({ id, type: 'raster', source: sourceId, paint: { 'raster-opacity': Math.max(definition.opacity, 0.68) } })
+        map.addLayer({ id, type: 'raster', source: sourceId, paint: { 'raster-opacity': definition.opacity, 'raster-fade-duration': 0 } })
       }
 
       if (!shouldShow && exists) {
         map.removeLayer(id)
         if (map.getSource(sourceId)) map.removeSource(sourceId)
+        setLayerStatus((current) => {
+          const next = { ...current }
+          delete next[name]
+          return next
+        })
       }
     })
 
@@ -185,7 +205,9 @@ export default function PropertyMap({
         </div>
         <div className="overlay-switch" aria-label="Map overlays">
           {overlayNames.map((name) => (
-            <button key={name} className={activeOverlays.includes(name) ? 'active' : ''} onClick={() => toggleOverlay(name)}>{name}</button>
+            <button key={name} className={activeOverlays.includes(name) ? `active ${layerStatus[name] ?? ''}` : ''} onClick={() => toggleOverlay(name)} aria-pressed={activeOverlays.includes(name)}>
+              {name}{layerStatus[name] === 'loading' ? ' ···' : layerStatus[name] === 'error' ? ' !' : ''}
+            </button>
           ))}
         </div>
       </div>
@@ -194,7 +216,7 @@ export default function PropertyMap({
         <div><span className="mini-label">MAP VIEW</span><strong>{baseMap}{activeOverlays.length ? ` + ${activeOverlays.join(' + ')}` : ''}</strong><small>{mapStatus}</small></div>
         <span className={parcelVerified ? 'map-proof verified' : 'map-proof'}>{parcelVerified ? 'Parcel verified' : 'Address located'}</span>
       </div>
-      {activeOverlays.length > 0 && <div className="active-layer-legend"><strong>Visible layers</strong>{activeOverlays.map((name) => <span key={name}>{name}</span>)}</div>}
+      {activeOverlays.length > 0 && <div className="active-layer-legend"><strong>Layer status</strong>{activeOverlays.map((name) => <span key={name} className={layerStatus[name] ?? 'loading'}><i />{name}: {layerStatus[name] === 'visible' ? 'on map' : layerStatus[name] === 'error' ? 'unavailable' : 'loading'}</span>)}</div>}
     </section>
   )
 }
