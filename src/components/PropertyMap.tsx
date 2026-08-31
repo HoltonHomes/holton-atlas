@@ -108,6 +108,13 @@ export default function PropertyMap({
   const markerRef = useRef<Marker | null>(null)
   const planningMarkersRef = useRef<Map<number, Marker>>(new Map())
   const parcelRef = useRef<ParcelFeature | null>(parcel)
+  // Guards against the "map glitches" symptom: without these, every map
+  // (re)creation was immediately followed by a redundant setStyle() call
+  // from the basemap-sync effect below (a visible double tile-load/flicker
+  // on every property search), and rapid basemap clicks could let a stale
+  // style.load callback from an earlier click paint over a newer one.
+  const skipNextStyleSyncRef = useRef(false)
+  const styleRequestRef = useRef(0)
   const [baseMap, setBaseMap] = useState<BaseMapMode>('Aerial')
   const [activeOverlays, setActiveOverlays] = useState<string[]>([])
   const [mapStatus, setMapStatus] = useState('Map ready')
@@ -141,9 +148,14 @@ export default function PropertyMap({
 
   useEffect(() => {
     if (!containerRef.current) return
+    // Build the map in whatever basemap is currently selected (it can carry
+    // over from a previous property on the same instance) instead of always
+    // hardcoding Aerial — that mismatch was what forced the redundant
+    // setStyle() below on every single mount.
+    const initialMode = planningMode ? 'Aerial' : baseMapRef.current
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: styleFor('Aerial'),
+      style: styleFor(initialMode),
       center: [property.longitude, property.latitude],
       zoom: 17,
       attributionControl: {},
@@ -152,12 +164,14 @@ export default function PropertyMap({
     })
     map.addControl(new NavigationControl({ showCompass: !planningMode }), 'top-right')
     mapRef.current = map
+    skipNextStyleSyncRef.current = true
     if (!planningMode) {
       markerRef.current = new Marker({ color: '#d95f82' }).setLngLat([property.longitude, property.latitude]).addTo(map)
     }
 
     map.on('load', () => {
-      setMapStatus('Aerial loaded')
+      setMapStatus(`${initialMode} loaded`)
+      if (initialMode === 'Terrain') map.setTerrain({ source: 'atlas-terrain-dem', exaggeration: 1.55 })
       drawParcel(map, parcelRef.current)
     })
 
@@ -220,13 +234,26 @@ export default function PropertyMap({
     if (planningMode) return
     const map = mapRef.current
     if (!map) return
+    // Skip the one style-sync that would otherwise immediately follow map
+    // creation and reload tiles a second time for no reason.
+    if (skipNextStyleSyncRef.current) {
+      skipNextStyleSyncRef.current = false
+      return
+    }
+    const requestId = ++styleRequestRef.current
     setMapStatus(`Loading ${baseMap}…`)
     map.once('style.load', () => {
+      // A newer basemap click superseded this one before it finished
+      // loading — don't let a stale callback draw over the current state.
+      if (styleRequestRef.current !== requestId) return
       if (baseMap === 'Terrain') map.setTerrain({ source: 'atlas-terrain-dem', exaggeration: 1.55 })
       drawParcel(map, parcel)
       syncOverlays(map, activeOverlays)
       setMapStatus(`${baseMap} loaded`)
-      map.once('idle', () => map.easeTo({ pitch: baseMap === 'Terrain' ? 62 : 0, bearing: baseMap === 'Terrain' ? -18 : 0, duration: 900 }))
+      map.once('idle', () => {
+        if (styleRequestRef.current !== requestId) return
+        map.easeTo({ pitch: baseMap === 'Terrain' ? 62 : 0, bearing: baseMap === 'Terrain' ? -18 : 0, duration: 900 })
+      })
     })
     map.setStyle(styleFor(baseMap))
     // eslint-disable-next-line react-hooks/exhaustive-deps
