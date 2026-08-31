@@ -14,17 +14,13 @@ import { HomeValueSection, IntelligenceStrip, RisksSection, CostsSection } from 
 import { ResearchCostsSection, ResearchHomeValueSection } from './components/ResearchEvidence'
 import PropertyMap from './components/PropertyMap'
 import PlanConfigurator from './components/PlanConfigurator'
-import HomeownerOverview from './components/HomeownerOverview'
 import ClientDecisionGuide from './components/ClientDecisionGuide'
+import ComparableHomes from './components/ComparableHomes'
+import PropertyResearch from './components/PropertyResearch'
 
-const clientNav = ['Brief', 'Explore', 'Plan', 'Money'] as const
+const clientNav = ['Summary', 'Price', 'Homes', 'Property', 'Research'] as const
 type ClientSection = typeof clientNav[number]
-type ClientIntent = 'buyer' | 'seller'
-
-const clientNavLabels: Record<ClientIntent, Record<ClientSection, string>> = {
-  buyer: { Brief: 'Brief', Explore: 'Explore', Plan: 'Plan', Money: 'Money' },
-  seller: { Brief: 'Brief', Explore: 'Property', Plan: 'Strategy', Money: 'Value' },
-}
+type ClientIntent = 'buyer' | 'seller' | 'researcher'
 
 function money(value: unknown) {
   const number = Number(value)
@@ -53,6 +49,18 @@ function numericValue(properties: Record<string, unknown>, keys: string[]) {
   return Number.isFinite(number) ? number : null
 }
 
+function reportTitle(intent: ClientIntent) {
+  if (intent === 'buyer') return 'Buyer Home Report'
+  if (intent === 'seller') return 'Seller Home Report'
+  return 'Property Research Report'
+}
+
+function reportPromise(intent: ClientIntent) {
+  if (intent === 'buyer') return 'Know what you are buying.'
+  if (intent === 'seller') return 'Understand what your property may be worth.'
+  return 'Explore the home, land and market around it.'
+}
+
 export default function App() {
   const [address, setAddress] = useState('')
   const [locatedProperty, setLocatedProperty] = useState<LocatedProperty | null>(null)
@@ -63,13 +71,13 @@ export default function App() {
   const [intelligence, setIntelligence] = useState<PropertyIntelligence | null>(null)
   const [searchStatus, setSearchStatus] = useState('')
   const [isSearching, setIsSearching] = useState(false)
-  const [activeSection, setActiveSection] = useState<ClientSection>('Brief')
-  const [clientIntent, setClientIntent] = useState<ClientIntent>('buyer')
+  const [activeSection, setActiveSection] = useState<ClientSection>('Summary')
+  const [clientIntent, setClientIntent] = useState<ClientIntent | null>(null)
   const hasProperty = Boolean(locatedProperty)
 
   function chooseIntent(intent: ClientIntent) {
     setClientIntent(intent)
-    setActiveSection('Brief')
+    setActiveSection('Summary')
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -78,13 +86,14 @@ export default function App() {
     if (!query) return
 
     setIsSearching(true)
+    setClientIntent(null)
     setResearchProfile(null)
     setCountyRecord(null)
     setParcel(null)
     setParcelProvider(null)
     setIntelligence(null)
-    setActiveSection('Brief')
-    setSearchStatus(clientIntent === 'buyer' ? 'Building your buyer property brief…' : 'Building your seller property brief…')
+    setActiveSection('Summary')
+    setSearchStatus('Finding the property and assembling the evidence…')
 
     try {
       const property = await resolveOhioAddress(query)
@@ -110,9 +119,9 @@ export default function App() {
         setParcelProvider(parcelData.provider ?? `${property.county} County GIS`)
       }
 
-      if (nextResearchProfile) setSearchStatus('Client brief ready · market, property and land evidence assembled.')
-      else if (parcelData?.parcel) setSearchStatus('Property and land brief ready · market research is still limited for this address.')
-      else setSearchStatus('Address brief ready · local parcel and property records are still being connected.')
+      if (nextResearchProfile) setSearchStatus('Property found · market, property and land evidence assembled.')
+      else if (parcelData?.parcel) setSearchStatus('Property found · parcel and land evidence assembled; market research is still limited.')
+      else setSearchStatus('Property found · local parcel and market records are still being connected.')
     } catch (error) {
       setLocatedProperty(null)
       setParcel(null)
@@ -135,201 +144,193 @@ export default function App() {
   const fullBaths = researchNumber(researchProfile, ['homeFacts', 'fullBathrooms']) ?? countyRecord?.dwelling?.fullBaths
   const parcelZoning = firstValue(properties, ['ZoneType', 'ZONING', 'Zoning', 'ZONE'])
   const zoning = researchText(researchProfile, ['zoning', 'value']) ?? (parcelZoning ? String(parcelZoning) : null)
-  const salePrice = researchNumber(researchProfile, ['sale', 'price']) ?? countyRecord?.salePrice ?? null
-  const saleDate = researchText(researchProfile, ['sale', 'mlsCloseDate']) ?? countyRecord?.saleDate
-  const annualTaxDisplay = researchText(researchProfile, ['tax', 'annualTaxDisplay'])
-  const classificationMls = researchText(researchProfile, ['classification', 'mlsDisplay'])
-  const classificationPublic = researchText(researchProfile, ['classification', 'publicRecordDisplay'])
   const valuation = buildAtlasValuation(researchProfile)
 
   const briefItems = useMemo(() => {
     const rows: Array<{ label: string; title: string; detail: string; tone?: string }> = []
-    if (valuation) rows.push({ label: clientIntent === 'buyer' ? 'Price context' : 'Market position', title: `${money(valuation.estimate)} ATLAS estimate`, detail: `${money(valuation.rangeLow)}–${money(valuation.rangeHigh)} likely range · ${valuation.confidence} confidence.` })
-    if (acres) rows.push({ label: 'Land', title: `${acres.toFixed(2)} acres`, detail: parcel ? 'Parcel geometry is available for map-based review.' : 'Recorded acreage is available; parcel geometry still needs verification.' })
-    if (intelligence?.flood) rows.push({ label: 'Due diligence', title: intelligence.flood.value, detail: intelligence.flood.detail, tone: intelligence.flood.status === 'Problem' ? 'attention' : undefined })
-    if (intelligence?.wetlands) rows.push({ label: 'Land signal', title: intelligence.wetlands.value, detail: intelligence.wetlands.detail })
-    if (zoning) rows.push({ label: 'Local rules', title: zoning, detail: 'Zoning is a starting point; proposed uses still need local verification.' })
+    if (valuation) rows.push({ label: clientIntent === 'seller' ? 'Estimated market range' : 'Price context', title: `${money(valuation.rangeLow)}–${money(valuation.rangeHigh)}`, detail: `${money(valuation.estimate)} current ATLAS center · ${valuation.confidence} evidence.` })
+    if (acres) rows.push({ label: 'Land', title: `${acres.toFixed(2)} acres`, detail: parcel ? 'Recorded parcel geometry is available for map-based review.' : 'Recorded acreage is available; parcel geometry still needs verification.' })
+    if (intelligence?.flood) rows.push({ label: 'Flood research', title: intelligence.flood.value, detail: intelligence.flood.detail, tone: intelligence.flood.status === 'Problem' ? 'attention' : undefined })
+    if (intelligence?.wetlands) rows.push({ label: 'Wetlands research', title: intelligence.wetlands.value, detail: intelligence.wetlands.detail })
+    if (zoning) rows.push({ label: 'Local rules', title: zoning, detail: 'This is a zoning reference, not approval of a proposed use.' })
     return rows.slice(0, 5)
   }, [valuation, acres, parcel, intelligence, zoning, clientIntent])
 
-  const landingCopy = clientIntent === 'buyer'
+  const intentCopy = clientIntent === 'seller'
     ? {
-        eyebrow: 'HOLTON HOMES · BUYER PROPERTY INTELLIGENCE',
-        title: 'Love the house. Understand the property.',
-        lede: 'Open a private ATLAS room before you get emotionally committed. See the land, value evidence, risks, possibilities and the questions worth asking next.',
-        label: 'Research a property you are considering',
-        asideTitle: 'From “I like it” to “I understand it.”',
-        asideBody: 'ATLAS guides the review instead of dumping a pile of records on you. Property context first, technical evidence underneath.',
+        eyebrow: 'WHAT MATTERS BEFORE YOU LIST',
+        title: 'What might it be worth—and what could change that?',
+        detail: 'ATLAS keeps market evidence, property context and public-record blind spots in one seller story instead of treating your home like a single automated number.',
+        take: 'Price the property buyers will actually experience, not just the tax record.',
       }
-    : {
-        eyebrow: 'HOLTON HOMES · SELLER PROPERTY INTELLIGENCE',
-        title: 'Understand your property before you decide to sell it.',
-        lede: 'Open a private ATLAS room to review market evidence, land context, buyer-facing questions, recorded taxes and the parts of the property that may shape your selling strategy.',
-        label: 'Research a property you own',
-        asideTitle: 'A selling decision should start with the whole property.',
-        asideBody: 'ATLAS brings value, property context and likely buyer questions together before you decide what to improve, explain or list.',
-      }
+    : clientIntent === 'researcher'
+      ? {
+          eyebrow: 'PROPERTY RESEARCH',
+          title: 'Understand the place without the rabbit hole.',
+          detail: 'Start with the plain-English summary, then go deeper only where the property raises a question worth answering.',
+          take: 'The useful part is knowing what the data proves—and where it stops.',
+        }
+      : {
+          eyebrow: 'WHAT MATTERS BEFORE THE DECISION',
+          title: 'The short version before you fall in love with the story.',
+          detail: 'ATLAS brings forward the evidence most likely to change whether you pursue, price, inspect or walk away from a property.',
+          take: 'Do not decide from the listing. Decide from the property.',
+        }
 
   return (
     <main className={hasProperty ? 'site-shell client-atlas' : 'site-shell'}>
       <nav className="nav-shell client-brandbar" aria-label="Primary navigation">
         <a className="brand" href="/" aria-label="ATLAS home"><span className="brand-mark">A</span><span><strong>ATLAS</strong><small>by Holton Homes</small></span></a>
-        <span className="nav-status">Private Client Intelligence</span>
+        <span className="nav-status">Property Intelligence by Holton Homes</span>
       </nav>
 
       {!hasProperty ? (
-        <section className="hero landing-hero private-landing">
+        <section className="hero landing-hero private-landing report-first-landing">
           <div className="hero-copy">
-            <p className="eyebrow">{landingCopy.eyebrow}</p>
-            <h1>{landingCopy.title}</h1>
-            <p className="lede">{landingCopy.lede}</p>
-
-            <div className="client-intent-switch" aria-label="Choose buyer or seller experience">
-              <button type="button" className={clientIntent === 'buyer' ? 'active' : ''} onClick={() => chooseIntent('buyer')}>
-                <span>I am considering buying</span><small>Research a property before the decision</small>
-              </button>
-              <button type="button" className={clientIntent === 'seller' ? 'active' : ''} onClick={() => chooseIntent('seller')}>
-                <span>I own or may sell</span><small>Understand value and selling strategy</small>
-              </button>
-            </div>
-
+            <p className="eyebrow">HOLTON HOMES · PROPERTY INTELLIGENCE</p>
+            <h1>Research any home.</h1>
+            <p className="lede">Understand the house, the price, the land, and what matters before your next move.</p>
             <form className="search-card" onSubmit={handleSubmit}>
-              <label htmlFor="property-address">{landingCopy.label}</label>
-              <div className="search-row"><input id="property-address" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Enter an Ohio property address" autoComplete="street-address" /><button type="submit" disabled={isSearching}>{isSearching ? 'Building brief…' : 'Open ATLAS'}</button></div>
-              <p className={searchStatus ? 'search-status active' : 'search-status'}>{searchStatus || 'Client access combines public records, mapped evidence and Holton Homes analysis in one guided property room.'}</p>
+              <label htmlFor="property-address">Enter a property address</label>
+              <div className="search-row"><input id="property-address" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Enter an Ohio property address" autoComplete="street-address" /><button type="submit" disabled={isSearching}>{isSearching ? 'Researching…' : 'Research this property'}</button></div>
+              <p className={searchStatus ? 'search-status active' : 'search-status'}>{searchStatus || 'Property research, made understandable. No giant dashboard before you even know what matters.'}</p>
             </form>
           </div>
           <aside className="private-access-card">
-            <span>{clientIntent === 'buyer' ? 'BUYER CLIENT ACCESS' : 'SELLER CLIENT ACCESS'}</span>
-            <strong>{landingCopy.asideTitle}</strong>
-            <p>{landingCopy.asideBody}</p>
-            <div><b>Prepared with Holton Homes</b><small>Evidence first · conclusions explained · unknowns stay visible</small></div>
+            <span>ATLAS BY HOLTON HOMES</span>
+            <strong>One property. Three different questions.</strong>
+            <p>Buyers, sellers and curious researchers use the same underlying evidence. ATLAS changes the story—not the truth.</p>
+            <div><b>Evidence first</b><small>Public record · map clue · needs confirmation</small></div>
           </aside>
         </section>
-      ) : locatedProperty ? (
+      ) : locatedProperty && !clientIntent ? (
+        <section className="property-reveal-shell">
+          <div className="property-reveal-topbar">
+            <div><span>PROPERTY FOUND</span><strong>{searchStatus}</strong></div>
+            <form className="compact-search" onSubmit={handleSubmit}><input value={address} onChange={(event) => setAddress(event.target.value)} aria-label="Search another property" /><button type="submit" disabled={isSearching}>{isSearching ? 'Researching…' : 'Search another'}</button></form>
+          </div>
+
+          <div className="property-reveal-grid">
+            <div className="property-reveal-visual">
+              <div className="reveal-visual-label"><span>PROPERTY VIEW</span><strong>{parcel ? 'Aerial + recorded parcel' : 'Aerial location view'}</strong></div>
+              <PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} compact />
+            </div>
+            <div className="property-reveal-copy">
+              <span>ATLAS PROPERTY REVEAL</span>
+              <h1>{locatedProperty.address}</h1>
+              <div className="reveal-facts">
+                {bedrooms != null && <b>{bedrooms} bd</b>}
+                {fullBaths != null && <b>{fullBaths} ba</b>}
+                {livingArea != null && <b>{livingArea.toLocaleString()} sf</b>}
+                {acres != null && <b>{acres.toFixed(2)} acres</b>}
+                {yearBuilt != null && <b>Built {yearBuilt}</b>}
+              </div>
+              <p>Before ATLAS decides what to show first, tell it why you are looking at this property.</p>
+
+              <div className="reveal-intent-grid">
+                <button type="button" onClick={() => chooseIntent('buyer')}><span>I'M THINKING OF BUYING</span><strong>Help me understand what I am buying.</strong><small>Price · comps · land · possibilities · what to verify</small></button>
+                <button type="button" onClick={() => chooseIntent('seller')}><span>I OWN THIS HOME</span><strong>Help me understand what it may be worth.</strong><small>Value · comps · buyer questions · selling context</small></button>
+                <button type="button" onClick={() => chooseIntent('researcher')}><span>JUST EXPLORING</span><strong>Tell me everything useful about this place.</strong><small>Property · market · land · records</small></button>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : locatedProperty && clientIntent ? (
         <>
           <section className="client-property-masthead">
             <div className="client-property-topline">
-              <div><span>PRIVATE PROPERTY ROOM</span><strong>Prepared by Jacob Holton · Holton Homes</strong></div>
+              <div><span>{reportTitle(clientIntent).toUpperCase()}</span><strong>Prepared with Holton Homes · {reportPromise(clientIntent)}</strong></div>
               <div className="property-room-actions">
-                <div className="room-intent-switch" aria-label="Property room mode">
+                <div className="room-intent-switch" aria-label="Property report mode">
                   <button type="button" className={clientIntent === 'buyer' ? 'active' : ''} onClick={() => chooseIntent('buyer')}>Buyer</button>
                   <button type="button" className={clientIntent === 'seller' ? 'active' : ''} onClick={() => chooseIntent('seller')}>Seller</button>
+                  <button type="button" className={clientIntent === 'researcher' ? 'active' : ''} onClick={() => chooseIntent('researcher')}>Explore</button>
                 </div>
-                <form className="compact-search" onSubmit={handleSubmit}><input value={address} onChange={(event) => setAddress(event.target.value)} aria-label="Search another property" /><button type="submit" disabled={isSearching}>{isSearching ? 'Building…' : 'Open another'}</button></form>
+                <button type="button" className="back-to-reveal" onClick={() => setClientIntent(null)}>Change report</button>
               </div>
             </div>
             <div className="client-property-title">
-              <div>
-                <p className="eyebrow">{clientIntent === 'buyer' ? 'YOUR BUYER ATLAS BRIEF' : 'YOUR SELLER ATLAS BRIEF'}</p>
-                <h1>{locatedProperty.address}</h1>
-                <p>{searchStatus}</p>
-              </div>
+              <div><p className="eyebrow">{reportTitle(clientIntent).toUpperCase()}</p><h1>{locatedProperty.address}</h1><p>{searchStatus}</p></div>
               <div className="client-proof-stack">
                 <span>{locatedProperty.county ? `${locatedProperty.county} County` : 'Ohio'}</span>
-                <span>{parcel ? 'Parcel verified' : 'Address verified'}</span>
-                {valuation && <strong>{money(valuation.estimate)} <small>ATLAS estimate</small></strong>}
+                <span>{parcel ? 'Parcel matched' : 'Address matched'}</span>
+                {valuation && <strong>{money(valuation.estimate)} <small>{clientIntent === 'seller' ? 'estimated center' : 'price context'}</small></strong>}
               </div>
             </div>
           </section>
 
-          <nav className="client-room-nav" aria-label="Client property room">
-            {clientNav.map((item, index) => (
-              <button key={item} className={activeSection === item ? 'active' : ''} onClick={() => setActiveSection(item)}>
-                <i>{String(index + 1).padStart(2, '0')}</i><span>{clientNavLabels[clientIntent][item]}</span>
-              </button>
-            ))}
+          <nav className="client-room-nav five-part-nav" aria-label="ATLAS property report">
+            {clientNav.map((item, index) => <button key={item} className={activeSection === item ? 'active' : ''} onClick={() => setActiveSection(item)}><i>{String(index + 1).padStart(2, '0')}</i><span>{item}</span></button>)}
           </nav>
 
           <AnimatePresence mode="wait">
             <motion.section key={`${clientIntent}-${activeSection}`} className="report-content client-room-content" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .3, ease: [0.22, 1, 0.36, 1] }}>
-              {activeSection === 'Brief' && (
+              {activeSection === 'Summary' && (
                 <>
-                  <section className="client-brief-intro">
-                    <div><span>{clientIntent === 'buyer' ? 'WHAT MATTERS BEFORE THE DECISION' : 'WHAT MATTERS BEFORE YOU LIST'}</span><h2>{clientIntent === 'buyer' ? 'The short version before the rabbit hole.' : 'The whole-property view before the pricing conversation.'}</h2></div>
-                    <p>{clientIntent === 'buyer' ? 'ATLAS brings forward the evidence most likely to change whether you pursue, price, inspect or walk away from a property.' : 'ATLAS starts with evidence about value, land and buyer-facing questions so selling strategy is not reduced to one automated estimate.'}</p>
+                  <section className="client-brief-intro"><div><span>{intentCopy.eyebrow}</span><h2>{intentCopy.title}</h2></div><p>{intentCopy.detail}</p></section>
+                  <ClientDecisionGuide intent={clientIntent} parcelVerified={Boolean(parcel)} landReady={Boolean(intelligence)} marketReady={Boolean(researchProfile || valuation)} zoningKnown={Boolean(zoning)} acres={acres} onOpen={setActiveSection} />
+                  <div className="client-brief-grid">{briefItems.map((item, index) => <motion.article key={`${item.label}-${index}`} className={item.tone === 'attention' ? 'client-brief-item attention' : 'client-brief-item'} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }}><span>{item.label}</span><strong>{item.title}</strong><p>{item.detail}</p></motion.article>)}</div>
+                  <section className="jacob-take"><div><span>JACOB'S TAKE</span><strong>{intentCopy.take}</strong></div><p>ATLAS should make the next question obvious. Mapped evidence is screening evidence; surveys, inspections, title work, permits, local rules and professional opinions still matter when the decision gets serious.</p></section>
+                  <section className="summary-next-actions">
+                    <button type="button" onClick={() => setActiveSection('Price')}><span>START WITH PRICE</span><strong>{clientIntent === 'seller' ? 'What might this property sell for?' : 'Does the price make sense?'}</strong></button>
+                    <button type="button" onClick={() => setActiveSection('Property')}><span>UNDERSTAND THE PROPERTY</span><strong>See the parcel, land and possibilities.</strong></button>
+                    <button type="button" onClick={() => setActiveSection('Research')}><span>CHECK THE UNKNOWNS</span><strong>See what still needs verified.</strong></button>
                   </section>
-
-                  <ClientDecisionGuide
-                    intent={clientIntent}
-                    parcelVerified={Boolean(parcel)}
-                    landReady={Boolean(intelligence)}
-                    marketReady={Boolean(researchProfile || valuation)}
-                    zoningKnown={Boolean(zoning)}
-                    acres={acres}
-                    onOpen={setActiveSection}
-                  />
-
-                  <div className="client-brief-grid">
-                    {briefItems.map((item, index) => <motion.article key={`${item.label}-${index}`} className={item.tone === 'attention' ? 'client-brief-item attention' : 'client-brief-item'} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }}><span>{item.label}</span><strong>{item.title}</strong><p>{item.detail}</p></motion.article>)}
-                  </div>
-
-                  <section className="jacob-take">
-                    <div><span>JACOB'S TAKE</span><strong>{clientIntent === 'buyer' ? 'Do not decide from the listing. Decide from the property.' : 'Do not price the house in isolation. Position the property buyers will actually experience.'}</strong></div>
-                    <p>{clientIntent === 'buyer' ? 'ATLAS is designed to surface the things I would want us to understand before you become attached to a property. The map and automated findings are screening evidence; surveys, inspections, permits, local rules and professional opinions still matter when the decision gets serious.' : 'ATLAS helps separate a strong selling point from a question that needs verification before it becomes a buyer objection. The goal is a cleaner pricing and preparation conversation, not artificial certainty.'}</p>
-                  </section>
-
-                  {clientIntent === 'seller' ? (
-                    <HomeownerOverview researchProfile={researchProfile} intelligence={intelligence} countyRecord={countyRecord} acres={acres} livingArea={livingArea} bedrooms={bedrooms} baths={fullBaths} salePrice={salePrice} annualTaxDisplay={annualTaxDisplay} parcelId={parcelId} zoning={zoning} classificationMls={classificationMls} classificationPublic={classificationPublic} onOpenValue={() => setActiveSection('Money')} onOpenLand={() => setActiveSection('Explore')} onOpenRisks={() => setActiveSection('Explore')} />
-                  ) : (
-                    <section className="buyer-brief-next">
-                      <div><span>YOUR NEXT 10 MINUTES</span><strong>Explore the parcel before you build a story about the property.</strong><p>Start with aerial and terrain, then turn on the layers that answer the question you actually care about: water, soils, slope, flood, wetlands or usable space.</p></div>
-                      <div className="buyer-next-actions"><button type="button" onClick={() => setActiveSection('Explore')}>Open the property map</button><button type="button" onClick={() => setActiveSection('Plan')}>Test what I could do here</button></div>
-                    </section>
-                  )}
                 </>
               )}
 
-              {activeSection === 'Explore' && (
+              {activeSection === 'Price' && (
+                <div className="client-workspace money-workspace">
+                  <div className="client-workspace-heading"><div><span>{clientIntent === 'seller' ? 'ESTIMATED MARKET RANGE' : 'PRICE CONTEXT'}</span><h2>{clientIntent === 'seller' ? 'What the market evidence currently supports.' : 'Does the asking price fit the evidence?'}</h2></div><p>Closed-market evidence carries the most weight. Automated estimates remain supporting evidence. County appraisal stays in tax context instead of pretending to be market value.</p></div>
+                  {researchProfile ? <ResearchHomeValueSection profile={researchProfile} /> : <HomeValueSection parcelVerified={Boolean(parcel)} county={locatedProperty.county} record={countyRecord} />}
+                  <details className="price-costs-drawer"><summary>Taxes & ownership-cost context</summary>{researchProfile ? <ResearchCostsSection profile={researchProfile} countyRecord={countyRecord} /> : <CostsSection county={locatedProperty.county} record={countyRecord} />}</details>
+                </div>
+              )}
+
+              {activeSection === 'Homes' && <ComparableHomes profile={researchProfile} livingArea={livingArea} acres={acres} yearBuilt={yearBuilt} />}
+
+              {activeSection === 'Property' && (
                 <div className="client-workspace">
-                  <div className="client-workspace-heading"><span>{clientIntent === 'buyer' ? 'EXPLORE THE PROPERTY' : 'UNDERSTAND THE PROPERTY'}</span><h2>{clientIntent === 'buyer' ? 'One map. Every useful layer.' : 'See the property through a buyer’s eyes.'}</h2><p>{clientIntent === 'buyer' ? 'Move through aerial, terrain, soil, water, flood and wetlands without leaving the property room.' : 'Use the same parcel, land and risk evidence a serious buyer may care about, then decide what deserves explanation or verification before listing.'}</p></div>
+                  <div className="client-workspace-heading"><div><span>UNDERSTAND THE PROPERTY</span><h2>What are you actually buying—or selling?</h2></div><p>The property map is the evidence canvas. Aerial, parcel, terrain, soils, water, flood and wetlands stay together instead of becoming seven different pages.</p></div>
                   <PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} />
                   <IntelligenceStrip intelligence={intelligence} loading={!intelligence} />
                   <div className="explore-two-up">
                     <article><span>HOME & SITE</span><strong>{livingArea ? `${bedrooms ?? '—'} bd · ${fullBaths ?? '—'} ba · ${livingArea.toLocaleString()} sf` : 'Home facts need verification'}</strong><p>{yearBuilt ? `Built ${yearBuilt}. ` : ''}{acres ? `${acres.toFixed(2)} acres. ` : ''}{zoning ? `${zoning} zoning reference.` : 'Local zoning still needs verification.'}</p></article>
-                    <article><span>{clientIntent === 'buyer' ? 'WHAT TO VERIFY NEXT' : 'WHAT A BUYER MAY ASK NEXT'}</span><strong>Use the map as a screening tool.</strong><p>Flood, wetlands, soils and terrain can change how land feels and functions. Local rules, septic, access, easements and permits still require source-level verification.</p></article>
+                    <article><span>PLAIN ENGLISH FIRST</span><strong>Maps explain the property. They do not approve a use.</strong><p>ATLAS keeps the technical source underneath while the first layer tells you what the evidence may mean and what is still unknown.</p></article>
                   </div>
-                  <RisksSection intelligence={intelligence} county={locatedProperty.county} parcelVerified={Boolean(parcel)} />
+                  <details className="possibilities-drawer"><summary><span>IMAGINE THE POSSIBILITIES</span><strong>Could this property fit what I want to do?</strong><small>Open the concept planner</small></summary><PlanConfigurator property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} intelligence={intelligence} acres={acres} zoningKnown={Boolean(zoning)} /></details>
                 </div>
               )}
 
-              {activeSection === 'Plan' && (
-                <PlanConfigurator
-                  property={locatedProperty}
-                  parcel={parcel}
-                  parcelVerified={Boolean(parcel)}
-                  intelligence={intelligence}
-                  acres={acres}
-                  zoningKnown={Boolean(zoning)}
-                />
-              )}
-
-              {activeSection === 'Money' && (
-                <div className="client-workspace money-workspace">
-                  <div className="client-workspace-heading"><span>{clientIntent === 'buyer' ? 'MONEY' : 'VALUE & SELLING CONTEXT'}</span><h2>{clientIntent === 'buyer' ? 'Value, taxes and what ownership may cost.' : 'What the evidence says the property may be worth—and what the record does not guarantee.'}</h2><p>{clientIntent === 'buyer' ? 'Market evidence and public tax records are kept separate so historical tax data is never presented like a guaranteed future bill.' : 'ATLAS keeps market evidence, county valuation and recorded taxes separate so pricing decisions are not built on labels that mean different things.'}</p></div>
-                  {researchProfile ? <ResearchHomeValueSection profile={researchProfile} /> : <HomeValueSection parcelVerified={Boolean(parcel)} county={locatedProperty.county} record={countyRecord} />}
-                  {researchProfile ? <ResearchCostsSection profile={researchProfile} countyRecord={countyRecord} /> : <CostsSection county={locatedProperty.county} record={countyRecord} />}
+              {activeSection === 'Research' && (
+                <div className="client-workspace research-workspace">
+                  <PropertyResearch intelligence={intelligence} parcelVerified={Boolean(parcel)} acres={acres} zoning={zoning} county={locatedProperty.county} hasCauv={countyRecord ? countyRecord.hasCauv : null} />
+                  <RisksSection intelligence={intelligence} county={locatedProperty.county} parcelVerified={Boolean(parcel)} />
+                  <section className="client-evidence-drawer in-research">
+                    <details>
+                      <summary><span>Records, sources & methodology</span><small>Open the technical evidence</small></summary>
+                      <div className="records-grid records-page-grid">
+                        <div><span>Parcel ID</span><strong>{String(parcelId ?? 'Needs confirmation')}</strong></div>
+                        <div><span>Zoning</span><strong>{zoning ?? 'Needs local confirmation'}</strong></div>
+                        <div><span>County source</span><strong>{parcelProvider ?? countyRecord?.source ?? locatedProperty.source}</strong></div>
+                        <div><span>County appraisal</span><strong>{money(countyRecord?.appraisedTotal)}</strong></div>
+                        <div><span>Taxable assessment</span><strong>{money(countyRecord?.assessedTotal)}</strong></div>
+                        <div><span>Research review</span><strong>{researchProfile ? dateLabel(researchProfile.reviewed_at) : 'No reviewed profile'}</strong></div>
+                      </div>
+                      {researchProfile?.sources?.length ? <div className="source-link-list">{researchProfile.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer"><span>{source.role || source.type}</span><strong>{source.name}</strong>↗</a>)}</div> : null}
+                    </details>
+                  </section>
+                  <section className="contextual-client-cta">
+                    <span>{clientIntent === 'seller' ? 'PUBLIC DATA HAS A LIMIT' : 'WHEN THE PROPERTY GETS SERIOUS'}</span>
+                    <strong>{clientIntent === 'seller' ? 'ATLAS can show the record. A walkthrough is where the value gets tighter.' : clientIntent === 'researcher' ? 'Save the questions worth coming back to.' : 'Have Jacob look into the things the internet cannot settle.'}</strong>
+                    <p>{clientIntent === 'seller' ? 'Condition, updates, drainage work, outbuildings and presentation can materially change how a buyer reacts to the property.' : 'The goal is not to create more homework. It is to identify the few questions that deserve a real answer before the decision.'}</p>
+                  </section>
                 </div>
               )}
             </motion.section>
           </AnimatePresence>
 
-          <section className="client-evidence-drawer">
-            <details>
-              <summary><span>Records, sources & methodology</span><small>Open the evidence room</small></summary>
-              <div className="records-grid records-page-grid">
-                <div><span>Parcel ID</span><strong>{String(parcelId ?? 'Requires verification')}</strong></div>
-                <div><span>Zoning</span><strong>{zoning ?? 'Requires local verification'}</strong></div>
-                <div><span>County source</span><strong>{parcelProvider ?? countyRecord?.source ?? locatedProperty.source}</strong></div>
-                <div><span>County appraisal</span><strong>{money(countyRecord?.appraisedTotal)}</strong></div>
-                <div><span>Taxable assessment</span><strong>{money(countyRecord?.assessedTotal)}</strong></div>
-                <div><span>Research review</span><strong>{researchProfile ? dateLabel(researchProfile.reviewed_at) : 'No reviewed profile'}</strong></div>
-              </div>
-              {researchProfile?.sources?.length ? <div className="source-link-list">{researchProfile.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer"><span>{source.role || source.type}</span><strong>{source.name}</strong>↗</a>)}</div> : null}
-            </details>
-          </section>
-
-          <footer className="private-client-foot"><span>ATLAS by Holton Homes</span><p>Prepared as a client decision-support experience. Verify material property, legal, tax, zoning, environmental and financing questions with the appropriate official source or professional.</p></footer>
+          <footer className="private-client-foot"><span>ATLAS by Holton Homes</span><p>Property intelligence is decision support, not a survey, appraisal, engineering opinion, title opinion, zoning approval, tax quote or inspection. Material questions should be verified with the appropriate official source or professional.</p></footer>
         </>
       ) : null}
     </main>
