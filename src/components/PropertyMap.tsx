@@ -27,7 +27,13 @@ const BASEMAPS: Record<BaseMapMode, { tile: string; attribution: string; maxZoom
   Aerial: {
     tile: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Imagery © Esri and contributors',
-    maxZoom: 20,
+    // Esri's World_Imagery coverage tops out below z20 in a lot of rural
+    // areas — past that it serves a blank "no imagery" placeholder tile
+    // instead of a real 404, so MapLibre has nothing to stop on and just
+    // renders that placeholder blown up huge. Capping at 19 (same as
+    // Topographic, which never showed this) keeps the camera from ever
+    // reaching the dead zone.
+    maxZoom: 19,
   },
   Topographic: {
     tile: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
@@ -161,7 +167,9 @@ export default function PropertyMap({
       center: [property.longitude, property.latitude],
       zoom: 17,
       attributionControl: {},
-      maxZoom: 20,
+      // Matches BASEMAPS.Aerial.maxZoom below — the camera itself can't
+      // reach the zoom level where rural Esri imagery goes blank.
+      maxZoom: 19,
       maxPitch: 80,
     })
     map.addControl(new NavigationControl({ showCompass: !planningMode }), 'top-right')
