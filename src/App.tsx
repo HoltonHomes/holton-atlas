@@ -264,7 +264,7 @@ export default function App() {
           <div className="property-reveal-grid">
             <div className="property-reveal-visual">
               <div className="reveal-visual-label"><span>PROPERTY VIEW</span><strong>{parcel ? 'Aerial + recorded parcel' : 'Aerial location view'}</strong></div>
-              <PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} compact />
+              <PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} compact minimal />
             </div>
             <div className="property-reveal-copy">
               <span>ATLAS PROPERTY REVEAL</span>
@@ -350,7 +350,7 @@ export default function App() {
                 <div className="client-workspace home-workspace">
                   <div className="client-workspace-heading"><div><span>THE HOME</span><h2>What's actually here.</h2></div><p>Core facts and how the listing description compares with the public record — before beds and baths turn into a story.</p></div>
                   <div className="home-fact-hero">
-                    <div className="home-fact-map"><PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} compact /></div>
+                    <div className="home-fact-map"><PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} compact minimal /></div>
                     <div className="home-fact-grid">
                       <article><span>Bedrooms</span><strong>{bedrooms ?? '—'}</strong></article>
                       <article><span>Full baths</span><strong>{fullBaths ?? '—'}</strong></article>

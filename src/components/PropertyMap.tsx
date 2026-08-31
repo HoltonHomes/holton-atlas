@@ -6,7 +6,7 @@ import type { LocatedProperty, ParcelFeature } from '../services/ohioProperty'
 import { INTELLIGENCE_OVERLAYS } from '../services/propertyIntelligence'
 import AtlasWorld from './world/AtlasWorld'
 
-export type BaseMapMode = 'Aerial' | 'Terrain' | 'Topographic'
+export type BaseMapMode = 'Aerial' | 'Topographic'
 export type PlannerName = 'Barn' | 'Garden' | 'Poultry' | 'Pasture' | 'Goats' | 'Orchard' | 'Pond' | 'Driveway'
 export type PlanSummary = { count: number; byType: Partial<Record<PlannerName, number>> }
 
@@ -30,11 +30,6 @@ const BASEMAPS: Record<BaseMapMode, { tile: string; attribution: string; maxZoom
     attribution: 'Imagery © Esri and contributors',
     maxZoom: 20,
   },
-  Terrain: {
-    tile: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Imagery © Esri and contributors',
-    maxZoom: 20,
-  },
   Topographic: {
     tile: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Topographic map © Esri and contributors',
@@ -42,26 +37,26 @@ const BASEMAPS: Record<BaseMapMode, { tile: string; attribution: string; maxZoom
   },
 }
 
+// The DEM source is included in every basemap style (not just when tilted)
+// so the 3D toggle can call setTerrain()/setTerrain(null) directly instead
+// of forcing a full setStyle() + tile reload every time it's flipped.
 function styleFor(mode: BaseMapMode): StyleSpecification {
   const base = BASEMAPS[mode]
-  const style: StyleSpecification = {
+  return {
     version: 8,
     sources: {
       'atlas-base': { type: 'raster', tiles: [base.tile], tileSize: 256, attribution: base.attribution, maxzoom: base.maxZoom },
+      'atlas-terrain-dem': {
+        type: 'raster-dem',
+        tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+        encoding: 'terrarium',
+        tileSize: 256,
+        maxzoom: 15,
+        attribution: 'Elevation © Mapzen / AWS Terrain Tiles',
+      },
     },
     layers: [{ id: 'atlas-base-layer', type: 'raster', source: 'atlas-base' }],
   }
-  if (mode === 'Terrain') {
-    ;(style.sources as Record<string, unknown>)['atlas-terrain-dem'] = {
-      type: 'raster-dem',
-      tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-      encoding: 'terrarium',
-      tileSize: 256,
-      maxzoom: 15,
-      attribution: 'Elevation © Mapzen / AWS Terrain Tiles',
-    }
-  }
-  return style
 }
 
 function extendBounds(bounds: LngLatBounds, coordinates: unknown) {
@@ -91,6 +86,7 @@ export default function PropertyMap({
   parcel,
   parcelVerified,
   compact = false,
+  minimal = false,
   planningMode = false,
   planningTool,
   onPlanChange,
@@ -99,6 +95,11 @@ export default function PropertyMap({
   parcel: ParcelFeature | null
   parcelVerified: boolean
   compact?: boolean
+  // Strips the basemap/overlay toolbar, the site planner launcher, and the
+  // status footer — just the map, panned to the property. For the places
+  // (like the pre-intent property reveal) that only need a quick look at
+  // the property, not the full interactive studio experience.
+  minimal?: boolean
   planningMode?: boolean
   planningTool?: PlannerName
   onPlanChange?: (summary: PlanSummary) => void
@@ -116,6 +117,7 @@ export default function PropertyMap({
   const skipNextStyleSyncRef = useRef(false)
   const styleRequestRef = useRef(0)
   const [baseMap, setBaseMap] = useState<BaseMapMode>('Aerial')
+  const [is3D, setIs3D] = useState(false)
   const [activeOverlays, setActiveOverlays] = useState<string[]>([])
   const [mapStatus, setMapStatus] = useState('Map ready')
   const [layerStatus, setLayerStatus] = useState<Record<string, 'loading' | 'visible' | 'error'>>({})
@@ -125,9 +127,11 @@ export default function PropertyMap({
   const [plannerMessage, setPlannerMessage] = useState('')
   const [worldOpen, setWorldOpen] = useState(false)
   const baseMapRef = useRef<BaseMapMode>(baseMap)
+  const is3DRef = useRef(is3D)
   const plannerOpenRef = useRef(plannerOpen || planningMode)
   const plannerToolRef = useRef<PlannerName>(plannerTool)
   baseMapRef.current = baseMap
+  is3DRef.current = is3D
   plannerOpenRef.current = plannerOpen || planningMode
   plannerToolRef.current = plannerTool
   parcelRef.current = parcel
@@ -143,6 +147,7 @@ export default function PropertyMap({
       setPlannerOpen(true)
       setWorldOpen(false)
       setBaseMap('Aerial')
+      setIs3D(false)
     }
   }, [planningMode])
 
@@ -171,7 +176,10 @@ export default function PropertyMap({
 
     map.on('load', () => {
       setMapStatus(`${initialMode} loaded`)
-      if (initialMode === 'Terrain') map.setTerrain({ source: 'atlas-terrain-dem', exaggeration: 1.55 })
+      if (is3DRef.current) {
+        map.setTerrain({ source: 'atlas-terrain-dem', exaggeration: 1.55 })
+        map.easeTo({ pitch: 62, bearing: -18, duration: 0 })
+      }
       drawParcel(map, parcelRef.current)
     })
 
@@ -246,18 +254,34 @@ export default function PropertyMap({
       // A newer basemap click superseded this one before it finished
       // loading — don't let a stale callback draw over the current state.
       if (styleRequestRef.current !== requestId) return
-      if (baseMap === 'Terrain') map.setTerrain({ source: 'atlas-terrain-dem', exaggeration: 1.55 })
+      if (is3DRef.current) map.setTerrain({ source: 'atlas-terrain-dem', exaggeration: 1.55 })
       drawParcel(map, parcel)
       syncOverlays(map, activeOverlays)
       setMapStatus(`${baseMap} loaded`)
       map.once('idle', () => {
         if (styleRequestRef.current !== requestId) return
-        map.easeTo({ pitch: baseMap === 'Terrain' ? 62 : 0, bearing: baseMap === 'Terrain' ? -18 : 0, duration: 900 })
+        map.easeTo({ pitch: is3DRef.current ? 62 : 0, bearing: is3DRef.current ? -18 : 0, duration: 900 })
       })
     })
     map.setStyle(styleFor(baseMap))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseMap, planningMode])
+
+  useEffect(() => {
+    // Toggling 3D never needs a setStyle()/tile reload — the DEM source is
+    // already part of every basemap style, so this just switches the
+    // terrain on/off and eases the camera to match.
+    if (planningMode) return
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    if (is3D) {
+      map.setTerrain({ source: 'atlas-terrain-dem', exaggeration: 1.55 })
+      map.easeTo({ pitch: 62, bearing: -18, duration: 900 })
+    } else {
+      map.setTerrain(null)
+      map.easeTo({ pitch: 0, bearing: 0, duration: 900 })
+    }
+  }, [is3D, planningMode])
 
   useEffect(() => {
     const map = mapRef.current
@@ -409,16 +433,17 @@ export default function PropertyMap({
   }
 
   return (
-    <section className={`${compact ? 'atlas-map-shell compact-map' : 'atlas-map-shell'}${planningMode ? ' planning-map' : ''}`}>
-      {!planningMode && worldOpen && <AtlasWorld property={property} parcel={parcel} parcelVerified={parcelVerified} onClose={() => setWorldOpen(false)} />}
+    <section className={`${compact ? 'atlas-map-shell compact-map' : 'atlas-map-shell'}${planningMode ? ' planning-map' : ''}${minimal ? ' minimal-map' : ''}`}>
+      {!planningMode && !minimal && worldOpen && <AtlasWorld property={property} parcel={parcel} parcelVerified={parcelVerified} onClose={() => setWorldOpen(false)} />}
 
-      {!planningMode && (
+      {!planningMode && !minimal && (
         <div className="atlas-map-toolbar">
           <div className="basemap-switch" aria-label="Base map">
             <button className={worldOpen ? 'world-mode active' : 'world-mode'} onClick={openWorld}>World</button>
-            {(['Aerial', 'Terrain', 'Topographic'] as BaseMapMode[]).map((mode) => (
-              <button key={mode} className={!worldOpen && baseMap === mode ? 'active' : ''} onClick={() => { setWorldOpen(false); setBaseMap(mode) }}>{mode === 'Terrain' ? '3D Terrain' : mode}</button>
+            {(['Aerial', 'Topographic'] as BaseMapMode[]).map((mode) => (
+              <button key={mode} className={!worldOpen && baseMap === mode ? 'active' : ''} onClick={() => { setWorldOpen(false); setBaseMap(mode) }}>{mode}</button>
             ))}
+            <button className={is3D ? 'tilt-toggle active' : 'tilt-toggle'} onClick={() => setIs3D((value) => !value)} aria-pressed={is3D} aria-label="Toggle 3D terrain tilt" title="Tilt the current base map in 3D">3D</button>
           </div>
           <div className="overlay-switch" aria-label="Map overlays">
             {overlayNames.map((name) => (
@@ -430,7 +455,7 @@ export default function PropertyMap({
         </div>
       )}
 
-      {!planningMode && (
+      {!planningMode && !minimal && (
         <>
           <button className={plannerOpen ? 'site-planner-launch active' : 'site-planner-launch'} onClick={() => { setWorldOpen(false); setPlannerOpen((open) => !open) }} aria-expanded={plannerOpen}>
             <span>+</span>{plannerOpen ? 'Close planner' : 'Plan this property'}
@@ -462,10 +487,10 @@ export default function PropertyMap({
 
       <div ref={containerRef} className="atlas-map-canvas" />
 
-      {!planningMode && (
+      {!planningMode && !minimal && (
         <>
           <div className="atlas-map-foot">
-            <div><span className="mini-label">MAP VIEW</span><strong>{worldOpen ? 'ATLAS World' : baseMap === 'Terrain' ? '3D Terrain' : baseMap}{!worldOpen && activeOverlays.length ? ` + ${activeOverlays.join(' + ')}` : ''}</strong><small>{worldOpen ? 'Interactive parcel world · drag to orbit' : mapStatus}{placements.length ? ` · ${placements.length} idea${placements.length === 1 ? '' : 's'} placed` : ''}</small></div>
+            <div><span className="mini-label">MAP VIEW</span><strong>{worldOpen ? 'ATLAS World' : `${baseMap}${is3D ? ' · 3D' : ''}`}{!worldOpen && activeOverlays.length ? ` + ${activeOverlays.join(' + ')}` : ''}</strong><small>{worldOpen ? 'Interactive parcel world · drag to orbit' : mapStatus}{placements.length ? ` · ${placements.length} idea${placements.length === 1 ? '' : 's'} placed` : ''}</small></div>
             <span className={parcelVerified ? 'map-proof verified' : 'map-proof'}>{parcelVerified ? 'Parcel verified' : 'Address located'}</span>
           </div>
           {activeOverlays.length > 0 && !worldOpen && <div className="active-layer-legend"><strong>Layer status</strong>{activeOverlays.map((name) => <span key={name} className={layerStatus[name] ?? 'loading'}><i />{name}: {layerStatus[name] === 'visible' ? 'on map' : layerStatus[name] === 'error' ? 'unavailable' : 'loading'}</span>)}</div>}
