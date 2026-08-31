@@ -12,6 +12,7 @@ import './research-evidence.css'
 import './homeowner.css'
 import './owner-overrides.css'
 import './phase-two.css'
+import './components/charts/charts.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
