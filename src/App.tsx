@@ -217,7 +217,7 @@ export default function App() {
                   onOpenRisks={() => setActiveSection('Risks')}
                 />
                 <div className="owner-map-preview">
-                  <div className="section-heading compact"><div><p className="eyebrow">YOUR LAND</p><h2>Open the map when the land matters.</h2></div><p>Aerial, terrain and topographic views now change the base map itself. Soil, water, flood and wetlands are separate overlays.</p></div>
+                  <div className="section-heading compact"><div><p className="eyebrow">YOUR LAND</p><h2>See it. Tilt it. Plan it.</h2></div><p>Open the concept planner to place and move a barn, garden, coop, pasture, driveway or pond right on the property.</p></div>
                   <PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} compact />
                 </div>
               </>
@@ -251,7 +251,7 @@ export default function App() {
 
             {activeSection === 'Land & Maps' && (
               <div className="data-section">
-                <div className="section-heading"><div><p className="eyebrow">LAND & MAPS</p><h2>Read the land as a system.</h2></div><p>Switch the actual base map between Aerial, Terrain and Topographic. Then layer soil, water, flood and wetlands on top.</p></div>
+                <div className="section-heading"><div><p className="eyebrow">LAND & MAPS</p><h2>See the property. Sketch the possibilities.</h2></div><p>Use aerial, 3D terrain and map layers, then place ideas directly on the land.</p></div>
                 <PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} />
                 <IntelligenceStrip intelligence={intelligence} loading={!intelligence} />
                 <div className="interpretation-card"><span className="card-kicker">SOURCE DISCIPLINE</span><h3>Maps are evidence, not permits.</h3><p>ATLAS keeps parcel geometry, official environmental layers and local records separate. A visible map overlay is a screening signal until parcel-wide intersections and local rules are verified.</p></div>

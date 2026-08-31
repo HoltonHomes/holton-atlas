@@ -3,7 +3,7 @@ type ArcFeature = {
   geometry?: { rings?: number[][][] }
 }
 
-export type IntelligenceStatus = 'Verified' | 'Likely' | 'Requires Verification' | 'Problem'
+export type IntelligenceStatus = 'Verified' | 'Screened' | 'Likely' | 'Requires Verification' | 'Problem'
 
 export type IntelligenceFinding = {
   key: 'soil' | 'flood' | 'wetlands' | 'terrain'
@@ -136,7 +136,7 @@ async function getFlood(longitude: number, latitude: number): Promise<Intelligen
       'FLD_ZONE,ZONE_SUBTY,SFHA_TF,STATIC_BFE',
     )
     if (!attrs) {
-      return { key: 'flood', label: 'Flood', status: 'Likely', value: 'No mapped FEMA hazard at address point', detail: 'The geocoded address point does not intersect a mapped FEMA flood-hazard polygon. This is not yet a full-parcel intersection.', source: 'FEMA NFHL via Esri' }
+      return { key: 'flood', label: 'Flood', status: 'Screened', value: 'No mapped FEMA hazard at address point', detail: 'The geocoded address point does not intersect a mapped FEMA flood-hazard polygon. This is not yet a full-parcel intersection.', source: 'FEMA NFHL via Esri' }
     }
     const zone = text(attrs.FLD_ZONE) ?? 'Mapped flood zone'
     const subtype = text(attrs.ZONE_SUBTY)
@@ -156,14 +156,15 @@ async function getFlood(longitude: number, latitude: number): Promise<Intelligen
 
 async function getWetlands(longitude: number, latitude: number): Promise<IntelligenceFinding> {
   try {
-    const attrs = await queryPoint(
-      'https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands/MapServer/0/query',
-      longitude,
-      latitude,
-      '*',
-    )
+    const url = `/api/intelligence?layer=wetlands&longitude=${encodeURIComponent(longitude)}&latitude=${encodeURIComponent(latitude)}`
+    let response = await fetch(url)
+    if (!response.ok) response = await fetch(url)
+    if (!response.ok) throw new Error('Wetlands source unavailable')
+    const data = await response.json() as { features?: ArcFeature[]; error?: unknown }
+    if (data.error) throw new Error('Wetlands source unavailable')
+    const attrs = data.features?.[0]?.attributes ?? null
     if (!attrs) {
-      return { key: 'wetlands', label: 'Wetlands', status: 'Likely', value: 'No NWI wetland at address point', detail: 'No mapped NWI wetland polygon intersects the geocoded address point. This does not rule out wetlands elsewhere on the parcel or unmapped field conditions.', source: 'USFWS National Wetlands Inventory' }
+      return { key: 'wetlands', label: 'Wetlands', status: 'Screened', value: 'No NWI wetland at address point', detail: 'No mapped NWI wetland polygon intersects the geocoded address point. This does not rule out wetlands elsewhere on the parcel or unmapped field conditions.', source: 'USFWS National Wetlands Inventory' }
     }
     const wetlandType = text(attrs.WETLAND_TYPE) ?? text(attrs.WETLAND_TY) ?? text(attrs.ATTRIBUTE) ?? 'Mapped wetland'
     const code = text(attrs.ATTRIBUTE)
@@ -185,7 +186,7 @@ async function getTerrain(longitude: number, latitude: number): Promise<Intellig
     if (!response.ok) throw new Error('Elevation service unavailable')
     const data = await response.json() as { value?: number; resolution?: number }
     if (typeof data.value !== 'number' || !Number.isFinite(data.value)) throw new Error('No elevation returned')
-    return { key: 'terrain', label: 'Terrain', status: 'Likely', value: `${Math.round(data.value).toLocaleString()} ft elevation`, detail: `USGS 3DEP interpolated point elevation${data.resolution ? ` at roughly ${data.resolution} m source resolution` : ''}. Use the Terrain, Topography and Slope layers to read the surrounding landform; this is not a surveyed elevation.`, source: 'USGS 3DEP / EPQS' }
+    return { key: 'terrain', label: 'Terrain', status: 'Screened', value: `${Math.round(data.value).toLocaleString()} ft elevation`, detail: `USGS 3DEP interpolated point elevation${data.resolution ? ` at roughly ${data.resolution} m source resolution` : ''}. Use the Terrain, Topography and Slope layers to read the surrounding landform; this is not a surveyed elevation.`, source: 'USGS 3DEP / EPQS' }
   } catch {
     return { key: 'terrain', label: 'Terrain', status: 'Requires Verification', value: 'Elevation source unavailable', detail: 'USGS elevation data could not be reached during this check. Terrain map layers remain available.', source: 'USGS 3DEP' }
   }

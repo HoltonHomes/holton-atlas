@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { CountyPropertyRecord } from '../services/countyRecords'
 import type { ResearchProfile } from '../services/researchProfile'
 import { buildAtlasValuation } from '../services/valuationEngine'
@@ -141,39 +142,43 @@ export function ResearchHomeValueSection({ profile }: { profile: ResearchProfile
 export function ResearchCostsSection({ profile, countyRecord }: { profile: ResearchProfile; countyRecord: CountyPropertyRecord | null }) {
   const tax = profile.facts?.tax ?? {}
   const valuation = profile.facts?.valuation ?? {}
+  const atlasValuation = buildAtlasValuation(profile)
+  const annualTax = Number(tax.annualTaxPreferred) || 0
+  const [mortgage, setMortgage] = useState('')
+  const [insurance, setInsurance] = useState('')
+  const [utilities, setUtilities] = useState('')
+  const [maintenance, setMaintenance] = useState('')
+  const inputNumber = (value: string) => Math.max(0, Number(value.replace(/[$,]/g, '')) || 0)
+  const monthlyTax = annualTax / 12
+  const monthlyTotal = monthlyTax + inputNumber(mortgage) + inputNumber(insurance) + inputNumber(utilities) + inputNumber(maintenance) / 12
+  const maintenanceLow = atlasValuation ? atlasValuation.estimate * .005 : null
+  const maintenanceHigh = atlasValuation ? atlasValuation.estimate * .01 : null
 
   return (
     <div className="data-section">
       <div className="section-heading">
-        <div><p className="eyebrow">COSTS</p><h2>Use the right tax number.</h2></div>
-        <p>ATLAS no longer labels an ambiguous county extract field as annual property tax just because its column name says “Current Tax.”</p>
+        <div><p className="eyebrow">TAXES & COSTS</p><h2>Build a realistic ownership budget.</h2></div>
+        <p>ATLAS fills the verified property tax. Add only the costs you know; blank fields stay excluded instead of being silently guessed.</p>
       </div>
 
-      <div className="source-plan-grid researched-fact-grid">
-        <article className="intel-card">
-          <span className="card-kicker">{tax.taxYear ?? 'CURRENT'} TAX HISTORY</span>
-          <h3>{tax.annualTaxDisplay ?? money(tax.annualTaxPreferred)}</h3>
-          <p>{tax.sourceCount ?? 'Multiple'} independent public-record sources agree within a one-dollar difference.</p>
-          <span className="evidence-line">Preferred display: {money(tax.annualTaxPreferred)}</span>
-        </article>
+      <section className="cost-planner">
+        <div className="cost-total"><span>MONTHLY PLAN SO FAR</span><strong>{money(monthlyTotal)}</strong><small>Includes {money(monthlyTax)}/month verified property tax plus the amounts you enter.</small></div>
+        <div className="cost-input-grid">
+          <label>Mortgage payment<input value={mortgage} onChange={(event) => setMortgage(event.target.value)} inputMode="decimal" placeholder="$ / month" /></label>
+          <label>Home insurance<input value={insurance} onChange={(event) => setInsurance(event.target.value)} inputMode="decimal" placeholder="$ / month" /></label>
+          <label>Utilities<input value={utilities} onChange={(event) => setUtilities(event.target.value)} inputMode="decimal" placeholder="$ / month" /></label>
+          <label>Maintenance plan<input value={maintenance} onChange={(event) => setMaintenance(event.target.value)} inputMode="decimal" placeholder="$ / year" /></label>
+        </div>
+        {maintenanceLow != null && maintenanceHigh != null && <p className="planner-guidance">Planning reference only: 0.5%–1% of ATLAS estimated value is about <strong>{money(maintenanceLow)}–{money(maintenanceHigh)} per year</strong>. Actual upkeep depends on condition, systems, acreage and projects.</p>}
+      </section>
 
-        <article className="intel-card warning-card">
-          <span className="card-kicker">WITHHELD COUNTY FIELD</span>
-          <h3>{money(tax.countyExtractCurrentTaxField)}</h3>
-          <p>{tax.countyFieldStatus ?? 'Field semantics require verification.'}</p>
-          <span className="evidence-line">ATLAS will not substitute this for annual tax history.</span>
-        </article>
-
-        <article className="intel-card">
-          <span className="card-kicker">TAXABLE ASSESSMENT</span>
-          <h3>{money(valuation.taxableAssessedValue)}</h3>
-          <p>County appraised value {money(valuation.countyAppraisedValue)}. Keep assessed value, appraised value and market estimate separate.</p>
-        </article>
+      <div className="cost-fact-grid">
+        <article><span>{tax.taxYear ?? 'CURRENT'} VERIFIED TAX</span><strong>{tax.annualTaxDisplay ?? money(tax.annualTaxPreferred)}</strong><p>{tax.sourceCount ?? 'Multiple'} public sources agree within one dollar.</p></article>
+        <article><span>MONTHLY TAX EQUIVALENT</span><strong>{money(monthlyTax)}</strong><p>Annual tax divided by 12; your actual lender escrow can differ.</p></article>
+        <article><span>CAUV STATUS</span><strong>{countyRecord ? (countyRecord.hasCauv ? 'Enrolled' : 'Not enrolled') : 'Not verified'}</strong><p>Eligibility and recoupment are separate questions.</p></article>
       </div>
 
-      <div className="risk-list county-detail-list">
-        <article className="risk-row"><div><span className="card-kicker">CAUV</span><strong>{countyRecord ? (countyRecord.hasCauv ? 'County record shows enrolled' : 'County record shows not enrolled') : 'County record required'}</strong><p>Current enrollment is not the same as “could qualify.” Eligibility and recoupment need their own analysis.</p></div><span className="finding-status verified">County record</span></article>
-      </div>
+      <details className="tax-record-details"><summary>Technical tax record</summary><div><p><strong>{money(valuation.taxableAssessedValue)}</strong> taxable assessment · <strong>{money(valuation.countyAppraisedValue)}</strong> county appraisal.</p><p>Withheld extract field: {money(tax.countyExtractCurrentTaxField)}. {tax.countyFieldStatus ?? 'Field semantics require verification.'}</p></div></details>
 
       <ResearchSourcePanel profile={profile} />
     </div>

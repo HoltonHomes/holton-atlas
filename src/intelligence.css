@@ -86,6 +86,7 @@
   white-space: nowrap;
 }
 .finding-status.verified { background: #1c2b45; color: #fff; }
+.finding-status.screened { background: #eef3f1; color: #386350; }
 .finding-status.likely { background: rgba(28,43,69,.08); color: #1c2b45; }
 .finding-status.requires-verification { background: rgba(217,95,130,.12); color: #ad4563; }
 .finding-status.problem { background: #d95f82; color: #fff; }

@@ -25,6 +25,25 @@ export default defineConfig({
           response.end(new Uint8Array(await result.arrayBuffer()))
         } catch { next() }
       })
+      server.middlewares.use(async (request, response, next) => {
+        const incoming = new URL((request as any).url ?? '', 'http://localhost')
+        if (incoming.pathname !== '/api/intelligence' || incoming.searchParams.get('layer') !== 'wetlands') return next()
+        try {
+          const longitude = incoming.searchParams.get('longitude')
+          const latitude = incoming.searchParams.get('latitude')
+          const upstream = new URL('https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands/MapServer/0/query')
+          Object.entries({ f: 'json', geometry: `${longitude},${latitude}`, geometryType: 'esriGeometryPoint', inSR: '4326', outSR: '4326', spatialRel: 'esriSpatialRelIntersects', returnGeometry: 'false', outFields: '*' }).forEach(([key, value]) => upstream.searchParams.set(key, value))
+          let result = await fetch(upstream)
+          if (!result.ok) result = await fetch(upstream)
+          response.statusCode = result.status
+          response.setHeader('content-type', 'application/json; charset=utf-8')
+          response.end(new Uint8Array(await result.arrayBuffer()))
+        } catch {
+          response.statusCode = 502
+          response.setHeader('content-type', 'application/json; charset=utf-8')
+          response.end(JSON.stringify({ error: 'Wetlands source unavailable' }))
+        }
+      })
     },
   }],
 })

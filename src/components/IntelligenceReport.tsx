@@ -1,17 +1,6 @@
 import type { IntelligenceFinding, PropertyIntelligence } from '../services/propertyIntelligence'
 import type { CountyPropertyRecord } from '../services/countyRecords'
 
-const uses = [
-  ['🐓', 'Poultry'],
-  ['🐐', 'Goats'],
-  ['🐎', 'Horses'],
-  ['🐄', 'Cattle'],
-  ['🥕', 'Market garden'],
-  ['🌳', 'Orchard'],
-  ['🏡', 'Homestead'],
-  ['🚜', 'Hobby farm'],
-] as const
-
 function money(value: unknown) {
   const number = Number(value)
   if (!Number.isFinite(number) || number === 0) return '—'
@@ -74,30 +63,38 @@ export function LandMapsSection({ intelligence, loading, activeLayers, onToggleL
   )
 }
 
-function potentialFor(label: string, intelligence: PropertyIntelligence | null, acres: number | null, zoningKnown: boolean) {
-  if (!intelligence) return { status: 'Requires Verification' as const, note: 'Waiting for land intelligence.' }
+function propertyIdeas(intelligence: PropertyIntelligence | null, acres: number | null, zoningKnown: boolean) {
+  if (!intelligence) return []
   const wet = intelligence.wetlands.status === 'Requires Verification' && !intelligence.wetlands.value.toLowerCase().includes('no nwi')
   const flood = intelligence.flood.status === 'Problem'
   const soilText = `${intelligence.soil.value} ${intelligence.soil.detail}`.toLowerCase()
   const primeSoil = soilText.includes('prime farmland') || soilText.includes('statewide importance') || soilText.includes('capability class: 1') || soilText.includes('capability class: 2')
-
-  if (label === 'Market garden' || label === 'Orchard') {
-    if (flood || wet) return { status: 'Requires Verification' as const, note: 'Mapped water constraints need parcel-level review before siting.' }
-    if (primeSoil) return { status: 'Likely' as const, note: 'Soil signal is encouraging; slope, drainage and sun still matter.' }
-    return { status: 'Requires Verification' as const, note: 'Soil is mapped; drainage, slope and usable-area analysis comes next.' }
-  }
-
-  if (['Horses', 'Cattle', 'Goats'].includes(label)) {
-    if (!acres || !zoningKnown) return { status: 'Requires Verification' as const, note: 'Needs verified acreage, zoning and usable pasture area.' }
-    return { status: 'Likely' as const, note: 'Acreage is known; stocking and zoning rules still need local verification.' }
-  }
-
-  if (label === 'Poultry') {
-    if (!zoningKnown) return { status: 'Requires Verification' as const, note: 'Local animal and setback rules still need verification.' }
-    return { status: 'Likely' as const, note: 'Zoning is known; setbacks and flock limits should still be checked.' }
-  }
-
-  return { status: 'Requires Verification' as const, note: 'Requires zoning, septic, access and buildable-area checks.' }
+  return [
+    {
+      icon: '🥕', title: 'Garden or orchard', status: primeSoil && !flood && !wet ? 'Screened' as const : 'Requires Verification' as const,
+      verdict: primeSoil && !flood && !wet ? 'Worth exploring' : 'Site conditions still needed',
+      evidence: primeSoil ? 'Mapped soil is an encouraging first signal.' : 'A soil unit is mapped, but productivity is not yet established.',
+      checks: 'Confirm sun, drainage, slope and a usable location across the parcel.',
+    },
+    {
+      icon: '🐓', title: 'Small livestock', status: 'Requires Verification' as const,
+      verdict: acres ? 'Space may be available' : 'Acreage not verified',
+      evidence: acres ? `${acres.toFixed(2)} recorded acres gives this idea room to investigate.` : 'ATLAS does not have dependable acreage yet.',
+      checks: `${zoningKnown ? 'A zoning label is present, but' : 'Zoning,'} animal limits, setbacks, shelter and neighbor impacts still need local confirmation.`,
+    },
+    {
+      icon: '🐎', title: 'Pasture or large animals', status: 'Requires Verification' as const,
+      verdict: acres && acres >= 3 ? 'Acreage warrants review' : 'Not supported by acreage alone',
+      evidence: acres ? `${acres.toFixed(2)} total acres is not the same as usable pasture acreage.` : 'Total acreage is not verified.',
+      checks: 'Calculate open/usable acres, forage quality, water, fencing, shelter and stocking needs before calling this feasible.',
+    },
+    {
+      icon: '🏡', title: 'Barn, workshop or addition', status: 'Requires Verification' as const,
+      verdict: 'No buildable area calculated',
+      evidence: flood || wet ? 'Mapped water constraints need attention.' : 'The address point has no mapped water red flag, but that does not clear a building site.',
+      checks: 'Needs parcel-wide constraints, septic reserve area, access, utilities, setbacks and permits.',
+    },
+  ]
 }
 
 export function RuralPotentialSection({ intelligence, acres, zoningKnown }: {
@@ -105,50 +102,67 @@ export function RuralPotentialSection({ intelligence, acres, zoningKnown }: {
   acres: number | null
   zoningKnown: boolean
 }) {
+  const ideas = propertyIdeas(intelligence, acres, zoningKnown)
   return (
     <div className="data-section">
       <div className="section-heading">
-        <div><p className="eyebrow">RURAL POTENTIAL</p><h2>What could actually work here?</h2></div>
-        <p>ATLAS does not answer “allowed” from a pretty map. It combines land signals with the records still needed before making a confident call.</p>
+        <div><p className="eyebrow">PROPERTY IDEAS</p><h2>What is worth exploring?</h2></div>
+        <p>These are screening paths—not approvals. ATLAS separates the evidence that supports an idea from the checks that could still stop it.</p>
       </div>
-      <div className="potential-grid">
-        {uses.map(([icon, label]) => {
-          const result = potentialFor(label, intelligence, acres, zoningKnown)
-          return (
-            <article className="potential-card" key={label}>
-              <div className="potential-icon">{icon}</div>
-              <div className="potential-copy"><strong>{label}</strong><p>{result.note}</p></div>
-              <StatusBadge status={result.status} />
-            </article>
-          )
-        })}
+      <div className="idea-grid">
+        {ideas.map((idea) => <article className="idea-card" key={idea.title}>
+          <div className="idea-card-top"><span className="potential-icon">{idea.icon}</span><StatusBadge status={idea.status} /></div>
+          <h3>{idea.title}</h3><strong>{idea.verdict}</strong>
+          <dl><div><dt>Why it is here</dt><dd>{idea.evidence}</dd></div><div><dt>Before acting</dt><dd>{idea.checks}</dd></div></dl>
+        </article>)}
       </div>
       <div className="next-analysis">
-        <span className="card-kicker">NEXT DERIVED LAYERS</span>
-        <h3>Usable pasture · garden zones · barn/building areas</h3>
-        <p>Those should be calculated from the verified parcel polygon after subtracting mapped water constraints, steep slopes, existing improvements and known setbacks—not guessed from acreage alone.</p>
+        <span className="card-kicker">WHAT WOULD MAKE THIS DECISIVE</span>
+        <h3>A usable-acre map, not more generic “likely” badges.</h3>
+        <p>The next spatial analysis should calculate open ground, slope, water constraints, existing improvements and known setbacks across the parcel. Until then, ATLAS will not label horses, cattle, a barn or a homestead as likely from acreage alone.</p>
       </div>
     </div>
   )
 }
 
 export function RisksSection({ intelligence, county, parcelVerified }: { intelligence: PropertyIntelligence | null; county: string | null; parcelVerified: boolean }) {
-  const rows: Array<{ title: string; status: IntelligenceFinding['status']; value: string; detail: string }> = []
+  const rows: Array<{ title: string; status: IntelligenceFinding['status']; value: string; detail: string; action: string }> = []
   if (intelligence) {
-    rows.push({ title: 'Flood exposure', status: intelligence.flood.status, value: intelligence.flood.value, detail: intelligence.flood.detail })
-    rows.push({ title: 'Mapped wetlands', status: intelligence.wetlands.status, value: intelligence.wetlands.value, detail: intelligence.wetlands.detail })
+    rows.push({ title: 'Flood exposure', status: intelligence.flood.status, value: intelligence.flood.value, detail: intelligence.flood.detail, action: parcelVerified ? 'Run a full-parcel FEMA intersection before relying on this result.' : 'Verify the parcel boundary, then run a full-parcel FEMA intersection.' })
+    rows.push({ title: 'Mapped wetlands', status: intelligence.wetlands.status, value: intelligence.wetlands.value, detail: intelligence.wetlands.detail, action: 'Review the entire parcel and obtain field confirmation before disturbing questionable ground.' })
   }
-  rows.push({ title: 'Septic / onsite wastewater', status: 'Requires Verification', value: 'Local health record needed', detail: 'ATLAS should pull public septic records where the local health district exposes them; absence of a record is not proof of no system.' })
-  rows.push({ title: 'Zoning & livestock', status: 'Requires Verification', value: `${county ?? 'Local'} jurisdiction check needed`, detail: 'Township/county zoning is fragmented in Ohio. ATLAS will keep the controlling jurisdiction and last-reviewed source attached to the answer.' })
-  rows.push({ title: 'Parcel-wide constraints', status: parcelVerified ? 'Likely' : 'Requires Verification', value: parcelVerified ? 'Parcel geometry available' : 'Verified parcel boundary still needed', detail: 'Buildable area, pasture, garden and barn siting should use the legal parcel polygon rather than the address point.' })
+  rows.push({ title: 'Septic / onsite wastewater', status: 'Requires Verification', value: 'System and reserve area are unknown', detail: 'No verified health-department record or system condition is attached to this report.', action: 'Request the installation/permit record, locate the tank and leach field, and inspect when the decision warrants it.' })
+  rows.push({ title: 'Zoning & intended use', status: 'Requires Verification', value: `${county ?? 'Local'} controlling jurisdiction is not confirmed`, detail: 'A parcel or MLS zoning label does not prove a specific animal, structure or business use is allowed.', action: 'Confirm the controlling township/county office and ask about the exact intended use, setbacks and permits.' })
+  const mappedRows = rows.slice(0, intelligence ? 2 : 0)
+  const localRows = rows.slice(intelligence ? 2 : 0)
+  const screenedCount = rows.filter((row) => row.status === 'Verified' || row.status === 'Screened' || row.status === 'Likely').length
+  const openCount = rows.filter((row) => row.status === 'Requires Verification').length
+  const problemCount = rows.filter((row) => row.status === 'Problem').length
+  const screenedPercent = rows.length ? Math.round((screenedCount / rows.length) * 100) : 0
+  const mappedPercent = mappedRows.length ? Math.round((mappedRows.filter((row) => row.status !== 'Requires Verification').length / mappedRows.length) * 100) : 0
+  const localPercent = localRows.length ? Math.round((localRows.filter((row) => row.status !== 'Requires Verification').length / localRows.length) * 100) : 0
   return (
     <div className="data-section">
-      <div className="section-heading"><div><p className="eyebrow">RISKS & DUE DILIGENCE</p><h2>What could become expensive or limiting?</h2></div><p>ATLAS surfaces the questions that deserve money, records or a professional before a buyer commits.</p></div>
-      <div className="risk-list">
+      <div className="section-heading"><div><p className="eyebrow">RISKS & DUE DILIGENCE</p><h2>What could change the decision?</h2></div><p>Point-level map screens are separated from the open items that still require records, parcel analysis or a professional.</p></div>
+      <div className="risk-visual-summary">
+        <div className="risk-gauge" role="img" aria-label={`${screenedCount} of ${rows.length} checks screened`}>
+          <svg viewBox="0 0 180 105" aria-hidden="true"><path className="gauge-track" pathLength="100" d="M 22 91 A 68 68 0 0 1 158 91" /><path className="gauge-value" pathLength="100" strokeDasharray={`${screenedPercent} 100`} d="M 22 91 A 68 68 0 0 1 158 91" /></svg>
+          <div><strong>{screenedCount}<small>/{rows.length}</small></strong><span>CHECKS SCREENED</span></div>
+        </div>
+        <div className="risk-bars">
+          <div className="risk-bar-heading"><div><span>MAPPED SCREENS</span><strong>{mappedRows.filter((row) => row.status !== 'Requires Verification').length}/{mappedRows.length}</strong></div><small>{problemCount ? `${problemCount} red flag${problemCount === 1 ? '' : 's'}` : 'No red flags at point'}</small></div>
+          <div className="risk-progress"><i style={{ width: `${mappedPercent}%` }} /></div>
+          <div className="risk-bar-heading"><div><span>LOCAL RECORDS</span><strong>{localRows.filter((row) => row.status !== 'Requires Verification').length}/{localRows.length}</strong></div><small>{openCount} open check{openCount === 1 ? '' : 's'}</small></div>
+          <div className="risk-progress local"><i style={{ width: `${localPercent}%` }} /></div>
+          <p><b>{parcelVerified ? '✓' : '!'}</b>{parcelVerified ? 'Parcel boundary available for the next analysis.' : 'Parcel boundary still needed.'}</p>
+        </div>
+      </div>
+      <div className="risk-grid">
         {rows.map((row) => (
-          <article key={row.title} className="risk-row">
+          <article key={row.title} className="risk-card">
             <div><span className="card-kicker">{row.title}</span><strong>{row.value}</strong><p>{row.detail}</p></div>
             <StatusBadge status={row.status} />
+            <div className="risk-next"><span>NEXT STEP</span><p>{row.action}</p></div>
           </article>
         ))}
       </div>

@@ -17,16 +17,19 @@ function pct(value: number | null) {
 function ValuePositionChart({ sale, estimate, low, high }: { sale: number; estimate: number; low: number; high: number }) {
   const min = Math.min(sale, low) * 0.96
   const max = Math.max(sale, high) * 1.04
-  const x = (value: number) => 8 + ((value - min) / Math.max(1, max - min)) * 84
+  const position = (value: number) => ((value - min) / Math.max(1, max - min)) * 100
+  const gain = estimate - sale
+  const gainPct = (gain / sale) * 100
   return (
     <section className="owner-chart-card">
-      <div className="chart-heading"><div><span>VALUE POSITION</span><strong>Purchase to today</strong></div><small>Range shows uncertainty, not a promise.</small></div>
-      <svg viewBox="0 0 100 42" role="img" aria-label={`Purchase price ${money(sale)}, estimated value ${money(estimate)}, likely range ${money(low)} to ${money(high)}`}>
-        <line x1="8" y1="22" x2="92" y2="22" className="chart-axis" />
-        <line x1={x(low)} y1="22" x2={x(high)} y2="22" className="chart-range" />
-        <circle cx={x(sale)} cy="22" r="3.2" className="chart-sale" /><circle cx={x(estimate)} cy="22" r="4" className="chart-estimate" />
-        <text x={x(sale)} y="36" textAnchor="middle">Bought {money(sale)}</text><text x={x(estimate)} y="10" textAnchor="middle">Today {money(estimate)}</text>
-      </svg>
+      <div className="chart-heading"><div><span>VALUE SINCE PURCHASE</span><strong>{gain >= 0 ? '+' : '−'}{money(Math.abs(gain))} · {gainPct >= 0 ? '+' : ''}{gainPct.toFixed(1)}%</strong></div><small>The current estimate remains close to the purchase price.</small></div>
+      <div className="value-plot" role="img" aria-label={`Purchase price ${money(sale)}, estimated value ${money(estimate)}, likely range ${money(low)} to ${money(high)}`}>
+        <div className="value-plot-axis" />
+        <div className="value-plot-range" style={{ left: `${position(low)}%`, width: `${position(high) - position(low)}%` }} />
+        <div className="value-marker sale-marker" style={{ left: `${position(sale)}%` }}><i /><span>Bought<strong>{money(sale)}</strong></span></div>
+        <div className="value-marker estimate-marker" style={{ left: `${position(estimate)}%` }}><i /><span>Today<strong>{money(estimate)}</strong></span></div>
+      </div>
+      <div className="value-range-note"><span>Likely range</span><strong>{money(low)}–{money(high)}</strong><small>Range reflects model uncertainty—not a guaranteed sale price.</small></div>
     </section>
   )
 }
