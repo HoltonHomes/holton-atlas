@@ -14,6 +14,7 @@ import './owner-overrides.css'
 import './phase-two.css'
 import './components/charts/charts.css'
 import './tax-safety.css'
+import './client-room.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
