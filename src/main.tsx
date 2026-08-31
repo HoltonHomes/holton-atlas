@@ -29,16 +29,52 @@ import './land-at-glance.css'
 // SPA host), the map's off-main-thread style/tile processing silently
 // fails, and the renderer eventually crashes with "Cannot read properties
 // of undefined (reading 'shaderPreludeCode')" — the actual cause of the
-// map going blank. Point maplibre-gl at the matching version on a CDN
-// instead of trying to bundle these ourselves; its sibling import resolves
-// against the same CDN URL automatically. Pin this to the installed
-// maplibre-gl version (package.json) whenever it's upgraded.
-setWorkerUrl('https://unpkg.com/maplibre-gl@6.6.0/dist/maplibre-gl-worker.mjs')
+// map going blank.
+//
+// Pointing setWorkerUrl() straight at a CDN copy does NOT work: browsers
+// silently refuse to construct a module Worker from a cross-origin script
+// URL (no error, no network request — the worker just never starts).
+// Instead, fetch the worker script's source as text (a plain cross-origin
+// fetch, unlike Worker construction, is allowed once unpkg's CORS headers
+// permit it), rewrite its one relative sibling import to an absolute CDN
+// URL so it still resolves once the script's origin changes, and hand the
+// result to setWorkerUrl() as a same-origin blob: URL. A same-origin blob
+// URL is not subject to the cross-origin Worker restriction, and its own
+// absolute import of maplibre-gl-shared.mjs is a normal cross-origin
+// module fetch, which browsers do allow.
+//
+// Pin MAPLIBRE_VERSION to the installed maplibre-gl version (package.json)
+// whenever it's upgraded.
+const MAPLIBRE_VERSION = '6.6.0'
+const WORKER_CDN_URL = `https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl-worker.mjs`
+const SHARED_CDN_URL = `https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl-shared.mjs`
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </StrictMode>,
-)
+async function configureMapWorker(): Promise<void> {
+  try {
+    const response = await fetch(WORKER_CDN_URL)
+    if (!response.ok) throw new Error(`Worker fetch failed: ${response.status}`)
+    const source = await response.text()
+    if (!source.includes('"./maplibre-gl-shared.mjs"')) {
+      throw new Error('Unexpected worker source: sibling import not found')
+    }
+    const rewritten = source.replace('"./maplibre-gl-shared.mjs"', JSON.stringify(SHARED_CDN_URL))
+    const blobUrl = URL.createObjectURL(new Blob([rewritten], { type: 'text/javascript' }))
+    setWorkerUrl(blobUrl)
+  } catch (error) {
+    // If the CDN fetch/rewrite fails for any reason, fall back to pointing
+    // straight at the CDN. This keeps the rest of the app working the way
+    // it did before (map won't render), rather than throwing during boot.
+    console.error('[ATLAS] Failed to prepare a same-origin maplibre-gl worker; map rendering will be degraded.', error)
+    setWorkerUrl(WORKER_CDN_URL)
+  }
+}
+
+configureMapWorker().finally(() => {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </StrictMode>,
+  )
+})
