@@ -7,6 +7,8 @@ import { atlasMotion, atlasReveal } from '../design/motion'
 import MarketEvidenceChart from './charts/MarketEvidenceChart'
 import ValueStory from './ValueStory'
 
+type ValueIntent = 'buyer' | 'seller' | 'researcher'
+
 function money(value: unknown) {
   const number = Number(value)
   if (!Number.isFinite(number) || number === 0) return '—'
@@ -53,7 +55,7 @@ function AtlasValuationCard({ profile }: { profile: ResearchProfile }) {
   )
 }
 
-export function ResearchHomeValueSection({ profile }: { profile: ResearchProfile }) {
+export function ResearchHomeValueSection({ profile, intent = 'researcher' }: { profile: ResearchProfile; intent?: ValueIntent }) {
   const facts = profile.facts ?? {}
   const home = facts.homeFacts ?? {}
   const valuationFacts = facts.valuation ?? {}
@@ -64,7 +66,7 @@ export function ResearchHomeValueSection({ profile }: { profile: ResearchProfile
 
   return (
     <div className="data-section consumer-market-section">
-      {atlasValuation && <ValueStory valuation={atlasValuation} profile={profile} intent="researcher" />}
+      {atlasValuation && <ValueStory valuation={atlasValuation} profile={profile} intent={intent} />}
 
       <section className="market-fact-row">
         <article><span>THE HOME</span><strong>{home.livingAreaSqFt ? `${Number(home.livingAreaSqFt).toLocaleString()} sq ft` : 'Facts need verification'}</strong><p>{home.bedrooms ?? '—'} bd · {home.fullBathrooms ?? '—'} full ba · built {home.yearBuilt ?? '—'}{home.architecturalStyle ? ` · ${home.architecturalStyle}` : ''}</p></article>
