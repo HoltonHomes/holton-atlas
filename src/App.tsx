@@ -22,15 +22,13 @@ import PropertyStudio from './components/PropertyStudio'
 import HomeownerOverview from './components/HomeownerOverview'
 
 type ClientIntent = 'buyer' | 'seller' | 'researcher'
-type ClientSection = 'Insight' | 'Home' | 'Land' | 'Reality' | 'WorkFor'
+type ClientSection = 'Property' | 'Land' | 'Reality'
 type VisitorPath = 'understand' | 'value'
 
 const CLIENT_SECTIONS: Array<{ key: ClientSection; label: string }> = [
-  { key: 'Insight', label: 'ATLAS Insight' },
-  { key: 'Home', label: 'The Home' },
+  { key: 'Property', label: 'The Property' },
   { key: 'Land', label: 'The Land' },
   { key: 'Reality', label: 'The Reality Check' },
-  { key: 'WorkFor', label: 'What It Could Work For' },
 ]
 
 function money(value: unknown) {
@@ -82,14 +80,14 @@ export default function App() {
   const [intelligence, setIntelligence] = useState<PropertyIntelligence | null>(null)
   const [searchStatus, setSearchStatus] = useState('')
   const [isSearching, setIsSearching] = useState(false)
-  const [activeSection, setActiveSection] = useState<ClientSection>('Insight')
+  const [activeSection, setActiveSection] = useState<ClientSection>('Property')
   const [clientIntent, setClientIntent] = useState<ClientIntent | null>(null)
   const [visitorPath, setVisitorPath] = useState<VisitorPath | null>(null)
   const hasProperty = Boolean(locatedProperty)
 
   function chooseIntent(intent: ClientIntent) {
     setClientIntent(intent)
-    setActiveSection('Insight')
+    setActiveSection('Property')
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -98,13 +96,12 @@ export default function App() {
     if (!query) return
 
     setIsSearching(true)
-    setClientIntent(null)
     setResearchProfile(null)
     setCountyRecord(null)
     setParcel(null)
     setParcelProvider(null)
     setIntelligence(null)
-    setActiveSection('Insight')
+    setActiveSection('Property')
     setSearchStatus('Finding the property and assembling the evidence…')
 
     try {
@@ -116,7 +113,11 @@ export default function App() {
       }
 
       setLocatedProperty(property)
-      if (visitorPath === 'value') setClientIntent('seller')
+      // visitorPath is always set by the time a search can run (the search
+      // form only renders after a path is chosen) — this is what replaces
+      // the old post-search "why are you here" gate: clientIntent is
+      // derived immediately instead of asked for a second time.
+      setClientIntent(visitorPath === 'value' ? 'seller' : 'researcher')
       const [pointIntelligence, parcelData, nextCountyRecord, nextResearchProfile] = await Promise.all([
         getPropertyIntelligence(property.longitude, property.latitude),
         property.county ? resolveCountyParcel(property.county, property.longitude, property.latitude) : Promise.resolve(null),
@@ -254,40 +255,13 @@ export default function App() {
             </aside>
           </section>
         )
-      ) : locatedProperty && !clientIntent ? (
-        <section className="property-reveal-shell">
-          <div className="property-reveal-topbar">
-            <div><span>PROPERTY FOUND</span><strong>{searchStatus}</strong></div>
-            <form className="compact-search" onSubmit={handleSubmit}><input value={address} onChange={(event) => setAddress(event.target.value)} aria-label="Search another property" /><button type="submit" disabled={isSearching}>{isSearching ? 'Researching…' : 'Search another'}</button></form>
-          </div>
-
-          <div className="property-reveal-grid">
-            <div className="property-reveal-visual">
-              <div className="reveal-visual-label"><span>PROPERTY VIEW</span><strong>{parcel ? 'Aerial + recorded parcel' : 'Aerial location view'}</strong></div>
-              <PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} compact minimal />
-            </div>
-            <div className="property-reveal-copy">
-              <span>ATLAS PROPERTY REVEAL</span>
-              <h1>{locatedProperty.address}</h1>
-              <div className="reveal-facts">
-                {bedrooms != null && <b>{bedrooms} bd</b>}
-                {fullBaths != null && <b>{fullBaths} ba</b>}
-                {livingArea != null && <b>{livingArea.toLocaleString()} sf</b>}
-                {acres != null && <b>{acres.toFixed(2)} acres</b>}
-                {yearBuilt != null && <b>Built {yearBuilt}</b>}
-              </div>
-              <p>Before ATLAS decides what to show first, tell it why you are looking at this property.</p>
-
-              <div className="reveal-intent-grid">
-                <button type="button" onClick={() => chooseIntent('buyer')}><span>I'm looking to buy this</span><strong>See what you'd actually be buying: price, land, condition, what to verify.</strong></button>
-                <button type="button" onClick={() => chooseIntent('seller')}><span>I already own this home</span><strong>See what it may be worth and what buyers will ask.</strong></button>
-                <button type="button" onClick={() => chooseIntent('researcher')}><span>Just researching / not sure yet</span><strong>Get the full picture — price, land, records — no commitment.</strong></button>
-              </div>
-            </div>
-          </div>
-        </section>
       ) : locatedProperty && clientIntent ? (
         <>
+          <section className="property-hero">
+            <div className="reveal-visual-label"><span>PROPERTY VIEW</span><strong>{parcel ? 'Aerial + recorded parcel' : 'Aerial location view'}</strong></div>
+            <PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} minimal />
+          </section>
+
           <section className="client-property-masthead">
             <div className="client-property-topline">
               <div><span>{reportTitle(clientIntent).toUpperCase()}</span><strong>Prepared with Holton Homes · {reportPromise(clientIntent)}</strong></div>
@@ -297,7 +271,7 @@ export default function App() {
                   <button type="button" className={clientIntent === 'seller' ? 'active' : ''} onClick={() => chooseIntent('seller')}>Seller</button>
                   <button type="button" className={clientIntent === 'researcher' ? 'active' : ''} onClick={() => chooseIntent('researcher')}>Explore</button>
                 </div>
-                <button type="button" className="back-to-reveal" onClick={() => setClientIntent(null)}>Change report</button>
+                <form className="compact-search" onSubmit={handleSubmit}><input value={address} onChange={(event) => setAddress(event.target.value)} aria-label="Search another property" /><button type="submit" disabled={isSearching}>{isSearching ? 'Researching…' : 'Search another'}</button></form>
               </div>
             </div>
             <div className="client-property-title">
@@ -310,13 +284,13 @@ export default function App() {
             </div>
           </section>
 
-          <nav className="client-room-nav five-part-nav" aria-label="ATLAS property room">
-            {CLIENT_SECTIONS.map((item, index) => <button key={item.key} className={activeSection === item.key ? 'active' : ''} onClick={() => setActiveSection(item.key)}><i>{String(index + 1).padStart(2, '0')}</i><span>{item.label}</span></button>)}
+          <nav className="client-room-nav editorial-room-nav" aria-label="ATLAS property room">
+            {CLIENT_SECTIONS.map((item) => <button key={item.key} type="button" className={activeSection === item.key ? 'active' : ''} onClick={() => setActiveSection(item.key)}>{item.label}</button>)}
           </nav>
 
           <AnimatePresence mode="wait">
             <motion.section key={`${clientIntent}-${activeSection}`} className="report-content client-room-content" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .3, ease: [0.22, 1, 0.36, 1] }}>
-              {activeSection === 'Insight' && (
+              {activeSection === 'Property' && (
                 <>
                   <section className="client-brief-intro"><div><span>{intentCopy.eyebrow}</span><h2>{intentCopy.title}</h2></div><p>{intentCopy.detail}</p></section>
                   <ClientDecisionGuide intent={clientIntent} parcelVerified={Boolean(parcel)} landReady={Boolean(intelligence)} marketReady={Boolean(researchProfile || valuation)} zoningKnown={Boolean(zoning)} acres={acres} onOpen={setActiveSection} />
@@ -343,45 +317,29 @@ export default function App() {
                     <div className="client-brief-grid">{briefItems.slice(0, 4).map((item, index) => <motion.article key={`${item.label}-${index}`} className={item.tone === 'attention' ? 'client-brief-item attention' : 'client-brief-item'} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .06 }}><span>{item.label}</span><strong>{item.title}</strong><p>{item.detail}</p></motion.article>)}</div>
                   )}
                   <section className="jacob-take"><div><span>JACOB'S TAKE</span><strong>{intentCopy.take}</strong></div><p>ATLAS should make the next question obvious. Mapped evidence is screening evidence; surveys, inspections, title work, permits, local rules and professional opinions still matter when the decision gets serious.</p></section>
-                </>
-              )}
 
-              {activeSection === 'Home' && (
-                <div className="client-workspace home-workspace">
                   <div className="client-workspace-heading"><div><span>THE HOME</span><h2>What's actually here.</h2></div><p>Core facts and how the listing description compares with the public record — before beds and baths turn into a story.</p></div>
-                  <div className="home-fact-hero">
-                    <div className="home-fact-map"><PropertyMap property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} compact minimal /></div>
-                    <div className="home-fact-grid">
-                      <article><span>Bedrooms</span><strong>{bedrooms ?? '—'}</strong></article>
-                      <article><span>Full baths</span><strong>{fullBaths ?? '—'}</strong></article>
-                      <article><span>Living area</span><strong>{livingArea ? `${livingArea.toLocaleString()} sf` : '—'}</strong></article>
-                      <article><span>Year built</span><strong>{yearBuilt ?? '—'}</strong></article>
-                      <article><span>Lot size</span><strong>{acres ? `${acres.toFixed(2)} acres` : '—'}</strong></article>
-                      <article><span>Last recorded sale</span><strong>{salePrice ? money(salePrice) : '—'}</strong></article>
-                    </div>
-                  </div>
+                  <p className="property-fact-line">
+                    <strong>{bedrooms ?? '—'}</strong> bd · <strong>{fullBaths ?? '—'}</strong> ba · <strong>{livingArea ? livingArea.toLocaleString() : '—'}</strong> sf · built <strong>{yearBuilt ?? '—'}</strong> · <strong>{acres ? acres.toFixed(2) : '—'}</strong> acres · last sold <strong>{salePrice ? money(salePrice) : '—'}</strong>
+                  </p>
                   <div className="explore-two-up">
                     <article><span>CLASSIFICATION</span><strong>{classificationMls ?? classificationPublic ?? 'Needs verification'}</strong><p>{classificationMls && classificationPublic && classificationMls !== classificationPublic ? `The listing describes it as "${classificationMls}" while the public tax record shows "${classificationPublic}." ATLAS keeps both visible instead of picking one.` : 'How the home is described and how the county classifies it for tax purposes.'}</p></article>
                     <article><span>PARCEL RECORD</span><strong>{String(parcelId ?? 'Needs confirmation')}</strong><p>{locatedProperty.county ? `${locatedProperty.county} County` : 'Ohio'} record{parcelProvider ? ` · ${parcelProvider}` : ''}.</p></article>
                   </div>
-                </div>
+                </>
               )}
 
               {activeSection === 'Land' && (
                 <div className="client-workspace property-workspace">
                   <div className="client-workspace-heading"><div><span>THE LAND</span><h2>Acreage, terrain and what's actually on the ground.</h2></div><p>Parcel shape, road frontage, wooded/open land, water and mapped constraints — screening evidence, not a survey.</p></div>
-                  <PropertyStudio property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} intelligence={intelligence} acres={acres} onOpenPlan={() => setActiveSection('WorkFor')} />
+                  <PropertyStudio property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} intelligence={intelligence} acres={acres} onOpenPlan={() => document.getElementById('plan-this-land')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
                   <LandAtGlance intelligence={intelligence} />
                   <div className="explore-two-up">
                     <article><span>ZONING REFERENCE</span><strong>{zoning ?? 'Needs local confirmation'}</strong><p>{zoning ? `${zoning} zoning reference found. This does not settle a specific proposed use.` : 'Local zoning still needs verification with the applicable jurisdiction.'}</p></article>
                     <article><span>{intelligence?.parcelAnalysis ? 'FULL LOT CHECKED' : 'LIMITED CHECK SO FAR'}</span><strong>{intelligence?.parcelAnalysis ? 'ATLAS checked the whole lot—not just the address point.' : 'Some findings are still based on the address point only.'}</strong><p>{intelligence?.parcelAnalysis ? `Flood, wetlands and soil findings reflect the recorded parcel${intelligence.parcelAnalysis.slope ? '; terrain is sampled across it' : ''}${intelligence.parcelAnalysis.water ? '; mapped surface water is included' : ''}.` : 'ATLAS shows exactly what still needs checking across the full lot.'}</p></article>
                   </div>
-                </div>
-              )}
 
-              {activeSection === 'WorkFor' && (
-                <div className="client-workspace plan-room-workspace">
-                  <div className="client-workspace-heading"><div><span>WHAT IT COULD WORK FOR</span><h2>What could this property work for?</h2></div><p>Garden, chickens, goats, horses, a workshop, a barn, homestead potential — choose a use and ATLAS separates what the evidence supports from what still needs checked.</p></div>
+                  <div id="plan-this-land" className="client-workspace-heading plan-this-land-heading"><div><span>PLAN THIS LAND</span><h2>What could this property work for?</h2></div><p>Garden, chickens, goats, horses, a workshop, a barn, homestead potential — choose a use and ATLAS separates what the evidence supports from what still needs checked.</p></div>
                   <PlanConfigurator property={locatedProperty} parcel={parcel} parcelVerified={Boolean(parcel)} intelligence={intelligence} acres={acres} zoningKnown={Boolean(zoning)} />
                 </div>
               )}
