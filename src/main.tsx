@@ -13,6 +13,7 @@ import './homeowner.css'
 import './owner-overrides.css'
 import './phase-two.css'
 import './components/charts/charts.css'
+import './tax-safety.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
