@@ -1,7 +1,7 @@
 import { motion } from 'motion/react'
 
 type ClientIntent = 'buyer' | 'seller' | 'researcher'
-type ClientSection = 'Brief' | 'Explore' | 'Plan' | 'Money' | 'Property' | 'Strategy' | 'Value' | 'Research'
+type ClientSection = 'Insight' | 'Home' | 'Land' | 'Reality' | 'WorkFor'
 
 type ClientDecisionGuideProps = {
   intent: ClientIntent
@@ -23,24 +23,24 @@ type JourneyStep = {
 }
 
 const buyerSteps: JourneyStep[] = [
-  { eyebrow: 'START HERE · PROPERTY FIT', label: 'Property fit', title: 'Understand the actual land first.', detail: 'Open the parcel, terrain, soils, water and mapped constraints before creating a story about what the property could become.', section: 'Explore', action: 'Enter the property studio' },
-  { eyebrow: 'THEN · POSSIBILITIES', label: 'Possibilities', title: 'Test what you want to do here.', detail: 'Place a barn, garden, pasture, pond or access idea on the parcel and see the evidence behind it.', section: 'Plan', action: 'Open the plan room' },
-  { eyebrow: 'BEFORE COMMITTING · DUE DILIGENCE', label: 'Due diligence', title: 'Turn unknowns into a short check list.', detail: 'Use the planning room to identify the local rules, septic, access, drainage and field checks that could change the answer.', section: 'Plan', action: 'See what needs checked' },
-  { eyebrow: 'THEN · MONEY', label: 'Money', title: 'Decide whether the full property makes sense.', detail: 'Bring price, comparable homes, taxes and ownership-cost context together after you understand the property.', section: 'Money', action: 'Review the money' },
+  { eyebrow: 'START HERE · THE HOME', label: 'The home', title: 'Know the house before the story.', detail: 'Beds, baths, square footage, year built and how the listing description compares with the public record.', section: 'Home', action: 'See the home' },
+  { eyebrow: 'THEN · THE LAND', label: 'The land', title: 'Understand the actual land.', detail: 'Open the parcel, terrain, soils, water and mapped constraints before creating a story about what the property could become.', section: 'Land', action: 'Enter the property studio' },
+  { eyebrow: 'THEN · THE REALITY CHECK', label: 'Reality check', title: 'See the price, taxes and what still needs verifying.', detail: 'Comparable sales, ownership costs, flood/wetland/soil screening and open due-diligence items in one place.', section: 'Reality', action: 'Run the reality check' },
+  { eyebrow: 'THEN · WHAT COULD THIS WORK FOR', label: 'What it could work for', title: 'Test what you actually want to do here.', detail: 'Place a barn, garden, pasture, pond or access idea on the parcel and see the evidence behind it.', section: 'WorkFor', action: 'Test an idea' },
 ]
 
 const sellerSteps: JourneyStep[] = [
-  { eyebrow: 'START HERE · VALUE', label: 'Value', title: 'What might the property realistically sell for?', detail: 'Begin with the evidence-supported range and your equity position, not a single automated estimate.', section: 'Value', action: 'Understand the value' },
-  { eyebrow: 'THEN · PROPERTY STORY', label: 'Property story', title: 'See what a serious buyer will notice.', detail: 'Land, access, terrain, water and improvements can become either part of the story or a question to resolve.', section: 'Property', action: 'Review the property' },
-  { eyebrow: 'THEN · POSITIONING', label: 'Positioning', title: 'Understand the comparison set.', detail: 'See the sold homes and property differences that support or challenge the asking-position story.', section: 'Strategy', action: 'Build the strategy' },
-  { eyebrow: 'BEFORE LISTING · DECISION', label: 'Selling decision', title: 'Resolve what public data cannot see.', detail: 'Condition, updates, drainage work, easements and real-world details may change how buyers react.', section: 'Strategy', action: 'Review open questions' },
+  { eyebrow: 'START HERE · THE REALITY CHECK', label: 'Value', title: 'What might the property realistically sell for?', detail: 'Begin with the evidence-supported range, comparable sales and your equity position, not a single automated estimate.', section: 'Reality', action: 'Understand the value' },
+  { eyebrow: 'THEN · THE HOME', label: 'The home', title: 'See the home the way a buyer will read it.', detail: 'Facts and classification, including any conflict between the listing description and the public record.', section: 'Home', action: 'Review the home' },
+  { eyebrow: 'THEN · THE LAND', label: 'The land', title: 'See what a serious buyer will notice about the land.', detail: 'Access, terrain, water and mapped constraints can become either part of the story or a question to resolve.', section: 'Land', action: 'Review the land' },
+  { eyebrow: 'BEFORE LISTING · WHAT IT COULD WORK FOR', label: 'Positioning', title: 'Know what this property can be marketed for.', detail: 'Garden, animals, workshop or homestead potential can become part of the story once the evidence supports it.', section: 'WorkFor', action: 'See the potential' },
 ]
 
 const researcherSteps: JourneyStep[] = [
-  { eyebrow: 'START HERE · PROPERTY', label: 'Property', title: 'Understand the place.', detail: 'Explore the parcel and land evidence that a normal listing page leaves out.', section: 'Explore', action: 'Explore the property' },
-  { eyebrow: 'THEN · RESEARCH', label: 'Research', title: 'See what is known and what is not.', detail: 'Separate public record, mapped evidence and questions that still need a person or local source.', section: 'Research', action: 'Open the research' },
-  { eyebrow: 'THEN · MONEY', label: 'Money', title: 'Get the market context.', detail: 'See the evidence-supported range and comparable sales without an agent-only CMA screen.', section: 'Money', action: 'Understand the price' },
-  { eyebrow: 'WHEN YOU WANT THE DETAILS · RESEARCH', label: 'Evidence', title: 'See what is known and what is not.', detail: 'Separate public record, map clue and questions that still need a person or local source.', section: 'Research', action: 'Open the research' },
+  { eyebrow: 'START HERE · THE HOME', label: 'The home', title: 'Understand the place.', detail: 'Facts a normal listing page leaves out, in one view.', section: 'Home', action: 'See the home' },
+  { eyebrow: 'THEN · THE LAND', label: 'The land', title: 'Explore the parcel.', detail: 'Terrain, soils, water and mapped constraints.', section: 'Land', action: 'Explore the land' },
+  { eyebrow: 'THEN · THE REALITY CHECK', label: 'Reality check', title: 'See what is known and what is not.', detail: 'Public record, mapped evidence, price context and the open questions that still need a person or local source.', section: 'Reality', action: 'Open the reality check' },
+  { eyebrow: 'THEN · WHAT COULD THIS WORK FOR', label: 'What it could work for', title: 'See what the land could support.', detail: 'Garden, animals, workshop, homestead — tested against the actual evidence.', section: 'WorkFor', action: 'See the possibilities' },
 ]
 
 export default function ClientDecisionGuide({ intent, parcelVerified, landReady, marketReady, zoningKnown, acres, onOpen }: ClientDecisionGuideProps) {

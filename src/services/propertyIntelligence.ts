@@ -138,11 +138,11 @@ export const INTELLIGENCE_OVERLAYS = {
     opacity: 0.9,
   },
   Flood: {
-    tile: '/api/map-tile?layer=flood&bbox={bbox-epsg-3857}',
+    tile: 'https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/export?dpi=96&transparent=true&format=png32&layers=show%3A28&bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256%2C256&f=image',
     opacity: 0.78,
   },
   Wetlands: {
-    tile: '/api/map-tile?layer=wetlands&bbox={bbox-epsg-3857}',
+    tile: 'https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands/MapServer/export?dpi=96&transparent=true&format=png32&layers=show%3A0&bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256%2C256&f=image',
     opacity: 0.82,
   },
 } as const

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && wrangler pages functions build --outdir=./dist/_worker.js/",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -32,6 +32,7 @@
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "6.1.1",
     "typescript": "7.0.2",
-    "vite": "8.2.2"
+    "vite": "8.2.2",
+    "wrangler": "^4.42.0"
   }
 }

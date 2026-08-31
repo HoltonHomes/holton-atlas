@@ -1,8 +1,7 @@
-import { useState, type CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import type { LocatedProperty, ParcelFeature } from '../services/ohioProperty'
 import type { PropertyIntelligence } from '../services/propertyIntelligence'
 import PropertyMap from './PropertyMap'
-import PlanConfigurator from './PlanConfigurator'
 import './property-studio.css'
 
 function percent(value: number | null | undefined) {
@@ -20,16 +19,15 @@ export default function PropertyStudio({
   parcelVerified,
   intelligence,
   acres,
-  zoningKnown,
+  onOpenPlan,
 }: {
   property: LocatedProperty
   parcel: ParcelFeature | null
   parcelVerified: boolean
   intelligence: PropertyIntelligence | null
   acres: number | null
-  zoningKnown: boolean
+  onOpenPlan: () => void
 }) {
-  const [plannerOpen, setPlannerOpen] = useState(false)
   const analysis = intelligence?.parcelAnalysis ?? null
   const slope = analysis?.slope ?? null
   const flood = analysis?.flood ?? null
@@ -48,8 +46,8 @@ export default function PropertyStudio({
           <h2>See the property. Test the idea.</h2>
         </div>
         <div className="studio-heading-note">
-          <strong>{analysis ? 'Parcel-wide model ready' : parcelVerified ? 'Parcel located · analysis loading' : 'Address view · parcel needed'}</strong>
-          <small>{analysis ? 'Mapped land evidence is drawn from the recorded parcel.' : 'Explore the location now. Parcel placement unlocks when the boundary is available.'}</small>
+          <strong>{analysis ? 'Full lot checked' : parcelVerified ? 'Boundary found · checking now' : 'Location found · boundary needed'}</strong>
+          <small>{analysis ? 'Flood, wetlands, soil and slope are mapped across the whole lot.' : 'Explore the location now. Placing ideas on the map unlocks once we confirm the property boundary.'}</small>
         </div>
       </header>
       <div className="property-studio-stage">
@@ -58,21 +56,13 @@ export default function PropertyStudio({
             <span>INTERACTIVE LAND CANVAS</span>
             <strong>{property.address}</strong>
           </div>
-          {plannerOpen ? (
-            <div className="studio-map-paused">
-              <span>PLANNER OPEN</span>
-              <strong>This map moved to the planner below.</strong>
-              <p>Only one live map runs at a time — close the planner to come back to the browse view.</p>
-            </div>
-          ) : (
-            <PropertyMap property={property} parcel={parcel} parcelVerified={parcelVerified} />
-          )}
+          <PropertyMap property={property} parcel={parcel} parcelVerified={parcelVerified} />
         </div>
 
         <aside className="studio-intelligence-rail">
           <div className="studio-rail-topline">
             <span>LAND READ</span>
-            <b>{analysis ? 'PARCEL' : 'SCREEN'}</b>
+            <b>{analysis ? 'FULL LOT' : 'QUICK SCAN'}</b>
           </div>
 
           <div className="studio-acreage">
@@ -87,7 +77,7 @@ export default function PropertyStudio({
             >
               <div><strong>{gentle == null ? '—' : Math.round(gentle)}</strong><span>{gentle == null ? 'pending' : '% gentle'}</span></div>
             </div>
-            <div><span>TERRAIN</span><strong>{slope ? `${percent(slope.over10Percent)} steep` : intelligence?.terrain.value ?? 'Not loaded'}</strong><small>{slope ? `${percent(slope.fiveTo10Percent)} moderate slope` : 'Parcel-wide slope will replace the point reading.'}</small></div>
+            <div><span>TERRAIN</span><strong>{slope ? `${percent(slope.over10Percent)} steep` : intelligence?.terrain.value ?? 'Not loaded'}</strong><small>{slope ? `${percent(slope.fiveTo10Percent)} moderate slope` : 'A full-lot slope reading will replace this estimate once available.'}</small></div>
           </div>
 
           <div className="studio-constraint-list">
@@ -107,23 +97,17 @@ export default function PropertyStudio({
               <b><i style={{ width: `${Math.min(100, water?.waterbodyPercent ?? 0)}%` }} /></b>
             </div>
           </div>
-          <button className="studio-plan-button" type="button" onClick={() => setPlannerOpen((open) => !open)} aria-expanded={plannerOpen}>
-            <span>{plannerOpen ? '×' : '+'}</span>
-            <div><strong>{plannerOpen ? 'Close site planner' : 'Plan on this property'}</strong><small>Place a barn, garden, pasture, pond or drive</small></div>
+          <button className="studio-plan-button" type="button" onClick={onOpenPlan}>
+            <span>+</span>
+            <div><strong>What could this work for?</strong><small>Place a barn, garden, pasture, pond or drive</small></div>
           </button>
 
           <footer>
-            <span>{parcelVerified ? 'Recorded parcel located' : 'Address located'}</span>
-            <small>{checkedAt ? `Evidence checked ${new Date(checkedAt).toLocaleDateString()}` : 'Evidence still loading'}</small>
+            <span>{parcelVerified ? 'Property boundary found' : 'Address located'}</span>
+            <small>{checkedAt ? `Checked ${new Date(checkedAt).toLocaleDateString()}` : 'Still checking'}</small>
           </footer>
         </aside>
       </div>
-
-      {plannerOpen ? (
-        <div className="studio-planner-drawer">
-          <PlanConfigurator property={property} parcel={parcel} parcelVerified={parcelVerified} intelligence={intelligence} acres={acres} zoningKnown={zoningKnown} />
-        </div>
-      ) : null}
     </section>
   )
 }

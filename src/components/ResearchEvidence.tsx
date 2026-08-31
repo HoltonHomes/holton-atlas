@@ -63,6 +63,10 @@ export function ResearchHomeValueSection({ profile, intent = 'researcher' }: { p
   const classification = facts.classification ?? {}
   const estimates = facts.thirdPartyValueEstimates ?? {}
   const atlasValuation = buildAtlasValuation(profile)
+  // <details> content is display:none while closed, so Recharts'
+  // ResponsiveContainer measures zero width if the chart mounts before the
+  // first open — only mount it once the element has actually been opened.
+  const [evidenceOpen, setEvidenceOpen] = useState(false)
 
   return (
     <div className="data-section consumer-market-section">
@@ -74,11 +78,11 @@ export function ResearchHomeValueSection({ profile, intent = 'researcher' }: { p
         <article><span>COUNTY VALUE</span><strong>{money(valuationFacts.countyAppraisedValue)}</strong><p>Tax-administration context only. County appraisal receives 0% weight in the ATLAS market estimate.</p></article>
       </section>
 
-      <details className="market-evidence-details">
+      <details className="market-evidence-details" onToggle={(event) => setEvidenceOpen(event.currentTarget.open)}>
         <summary><span>DEEPER MARKET EVIDENCE</span><strong>See the chart, weighting, source conflicts and outside estimates</strong></summary>
         <div className="market-evidence-detail-body">
           <AtlasValuationCard profile={profile} />
-          {atlasValuation && <MarketEvidenceChart valuation={atlasValuation} />}
+          {atlasValuation && evidenceOpen && <MarketEvidenceChart valuation={atlasValuation} />}
           <section className="evidence-conflict-card">
             <div className="conflict-heading"><span className="finding-status requires-verification">Source conflict</span><strong>Home classification</strong></div>
             <div className="conflict-columns"><div><span>MLS / listing description</span><strong>{classification.mlsDisplay ?? '—'}</strong></div><div><span>Public-record tax classification</span><strong>{classification.publicRecordDisplay ?? '—'}</strong></div></div>
